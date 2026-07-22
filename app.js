@@ -229,6 +229,10 @@ function weekDates(dateValue) {
   return Array.from({ length: 7 }, (_, index) => formatDate(new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + index)));
 }
 
+function earnedWeekDates(dateValue) {
+  return weekDates(dateValue).filter((date) => date <= TODAY);
+}
+
 function dayName(dateValue) {
   return ["일", "월", "화", "수", "목", "금", "토"][parseDate(dateValue).getDay()];
 }
@@ -698,7 +702,7 @@ function tabButton(view, iconName, label) {
 function renderDay(items) {
   const rate = completionRate(items);
   const todayStats = pointStatsFor(state.selectedStudent, [state.selectedDate]);
-  const weekStats = pointStatsFor(state.selectedStudent, weekDates(state.selectedDate));
+  const weekStats = pointStatsFor(state.selectedStudent, earnedWeekDates(state.selectedDate));
   const reward = rewardFor(weekStats.total);
   return `
     <section class="toolbar">
@@ -795,7 +799,7 @@ function renderPointSources(sources = []) {
 
 function renderWeek() {
   const dates = weekDates(state.selectedDate);
-  const weekStats = pointStatsFor(state.selectedStudent, dates);
+  const weekStats = pointStatsFor(state.selectedStudent, earnedWeekDates(state.selectedDate));
   const reward = rewardFor(weekStats.total);
   return `
     <section class="toolbar"><input type="date" value="${state.selectedDate}" onchange="setDate(this.value)" /><button type="button" class="primary" onclick="openScheduleForm()">${icon("plus")}일정</button></section>
@@ -813,7 +817,7 @@ function renderWeek() {
 function renderQuests() {
   const quests = visibleQuests();
   const done = quests.filter((quest) => quest.done).length;
-  const weekStats = pointStatsFor(state.selectedStudent, weekDates(state.selectedDate));
+  const weekStats = pointStatsFor(state.selectedStudent, earnedWeekDates(state.selectedDate));
   const reward = rewardFor(weekStats.total);
   return `
     <section class="toolbar"><div class="quest-score"><strong>${done}/${quests.length}</strong><span>퀘스트 완료</span></div><button type="button" class="primary" onclick="openQuestForm()">${icon("plus")}퀘스트</button></section>

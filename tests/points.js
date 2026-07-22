@@ -27,7 +27,7 @@ const context = {
 
 vm.runInNewContext(
   `${appCode}
-window.__pointsTest = { state, pointStatsFor, normalizeData };`,
+window.__pointsTest = { state, pointStatsFor, normalizeData, earnedWeekDates };`,
   context,
 );
 
@@ -63,6 +63,16 @@ context.window.__pointsTest.state.data.schedules.push({
 const targetMet = context.window.__pointsTest.pointStatsFor("hyeon1", [date]);
 if (targetMet.studyMinutes !== 180 || targetMet.studyPoints !== 10 || targetMet.schedulePoints !== 40 || targetMet.total !== 50) {
   throw new Error(`Expected 50P at daily target, received ${JSON.stringify(targetMet)}`);
+}
+
+context.window.__pointsTest.state.data.schedules.push(
+  { id: "future-study-1", studentId: "hyeon1", date: "2026-07-23", start: "09:00", end: "12:00", title: "future study", category: "study", done: true, createdBy: "parent", approvalStatus: "approved" },
+  { id: "future-habit-1", studentId: "hyeon1", date: "2026-07-23", start: "13:00", end: "13:30", title: "future habit", category: "habit", done: true, createdBy: "parent", approvalStatus: "approved" },
+);
+
+const earnedWeek = context.window.__pointsTest.pointStatsFor("hyeon1", context.window.__pointsTest.earnedWeekDates(date));
+if (earnedWeek.sources.some((source) => source.date === "2026-07-23")) {
+  throw new Error(`Future points should not be included in earned week stats: ${JSON.stringify(earnedWeek.sources)}`);
 }
 
 console.log("vacation routine point rules passed");
