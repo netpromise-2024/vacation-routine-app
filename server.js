@@ -7,6 +7,10 @@ const port = Number(process.env.PORT || 4177);
 const host = process.env.HOST || "0.0.0.0";
 const dataDir = path.join(root, "data");
 const dataPath = path.join(dataDir, "vacation-data.json");
+const supabaseUrl = trimTrailingSlash(process.env.SUPABASE_URL || "");
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseTable = process.env.SUPABASE_TABLE || "vacation_app_state";
+const appStateId = process.env.APP_STATE_ID || "family-vacation-routine";
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -14,6 +18,7 @@ const contentTypes = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
+  ".sql": "text/sql; charset=utf-8",
   ".yaml": "text/yaml; charset=utf-8",
 };
 
@@ -54,6 +59,14 @@ const initialData = {
   ],
 };
 
+function trimTrailingSlash(value) {
+  return value.replace(/\/+$/, "");
+}
+
+function hasSupabaseConfig() {
+  return Boolean(supabaseUrl && supabaseServiceRoleKey);
+}
+
 function normalizeData(data) {
   const incomingStudents = Array.isArray(data?.students) ? data.students : [];
   return {
@@ -73,7 +86,7 @@ function ensureData() {
   if (!fs.existsSync(dataPath)) fs.writeFileSync(dataPath, JSON.stringify(initialData, null, 2));
 }
 
-function readData() {
+function readFileData() {
   ensureData();
   try {
     return normalizeData(JSON.parse(fs.readFileSync(dataPath, "utf8")));
@@ -82,9 +95,61 @@ function readData() {
   }
 }
 
-function writeData(data) {
+function writeFileData(data) {
   ensureData();
   fs.writeFileSync(dataPath, JSON.stringify({ ...normalizeData(data), updatedAt: new Date().toISOString() }, null, 2));
+}
+
+function supabaseHeaders(prefer = "") {
+  return {
+    apikey: supabaseServiceRoleKey,
+    Authorization: `Bearer ${supabaseServiceRoleKey}`,
+    "Content-Type": "application/json",
+    ...(prefer ? { Prefer: prefer } : {}),
+  };
+}
+
+async function readSupabaseData() {
+  const url = `${supabaseUrl}/rest/v1/${supabaseTable}?id=eq.${encodeURIComponent(appStateId)}&select=data`;
+  const response = await fetch(url, { headers: supabaseHeaders() });
+  if (!response.ok) throw new Error(`Supabase read failed: ${response.status}`);
+
+  const rows = await response.json();
+  if (!Array.isArray(rows) || !rows[0]?.data) {
+    await writeSupabaseData(initialData);
+    return initialData;
+  }
+  return normalizeData(rows[0].data);
+}
+
+async function writeSupabaseData(data) {
+  const normalized = normalizeData(data);
+  const payload = {
+    id: appStateId,
+    data: normalized,
+    updated_at: new Date().toISOString(),
+  };
+  const url = `${supabaseUrl}/rest/v1/${supabaseTable}?on_conflict=id`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: supabaseHeaders("resolution=merge-duplicates"),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`Supabase write failed: ${response.status}`);
+  return normalized;
+}
+
+async function readData() {
+  if (!hasSupabaseConfig()) return readFileData();
+  return readSupabaseData();
+}
+
+async function writeData(data) {
+  if (!hasSupabaseConfig()) {
+    writeFileData(data);
+    return normalizeData(data);
+  }
+  return writeSupabaseData(data);
 }
 
 function sendJson(res, status, payload) {
@@ -113,20 +178,20 @@ function readBody(req) {
 async function handleApi(req, res) {
   try {
     if (req.method === "GET") {
-      sendJson(res, 200, readData());
+      sendJson(res, 200, await readData());
       return;
     }
 
     if (req.method === "PUT") {
       const body = await readBody(req);
-      writeData(JSON.parse(body || "{}"));
+      await writeData(JSON.parse(body || "{}"));
       sendJson(res, 200, { ok: true });
       return;
     }
 
     sendJson(res, 405, { error: "Method not allowed" });
   } catch (error) {
-    sendJson(res, 400, { error: error.message || "Bad request" });
+    sendJson(res, 500, { error: error.message || "Server error" });
   }
 }
 
@@ -158,5 +223,6 @@ http
     });
   })
   .listen(port, host, () => {
-    console.log(`Vacation routine app running at http://${host}:${port}`);
+    const storage = hasSupabaseConfig() ? "Supabase" : "local file";
+    console.log(`Vacation routine app running at http://${host}:${port} using ${storage} storage`);
   });
