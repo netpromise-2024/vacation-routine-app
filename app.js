@@ -2,8 +2,8 @@ const API = "/api/vacation";
 const STORAGE_KEY = "vacation-routine-cache-v2";
 const SESSION_KEY = "vacation-routine-session-v1";
 const TODAY = "2026-07-22";
-const DAY_START = 6 * 60;
-const DAY_END = 22 * 60;
+const DAY_START = 7 * 60;
+const DAY_END = 23 * 60 + 30;
 const STEP = 5;
 const PX_PER_MINUTE = 1.25;
 const app = document.querySelector("#app");
@@ -214,6 +214,15 @@ function duration(item) {
   return Math.max(0, timeToMinutes(item.end) - timeToMinutes(item.start));
 }
 
+function formatDuration(minutes) {
+  const safe = Math.max(0, Number(minutes || 0));
+  const hours = Math.floor(safe / 60);
+  const rest = safe % 60;
+  if (!hours) return `${rest}분`;
+  if (!rest) return `${hours}시간`;
+  return `${hours}시간 ${rest}분`;
+}
+
 function schedulesFor(studentId, date) {
   return state.data.schedules.filter((item) => item.studentId === studentId && item.date === date).sort((a, b) => a.start.localeCompare(b.start));
 }
@@ -274,7 +283,7 @@ function saveSchedule(event) {
     updatedAt: new Date().toISOString(),
   };
   if (!item.title) return;
-  if (timeToMinutes(item.end) <= timeToMinutes(item.start)) item.end = minutesToTime(timeToMinutes(item.start) + STEP);
+  if (timeToMinutes(item.end) <= timeToMinutes(item.start)) item.end = minutesToTime(Math.min(DAY_END, timeToMinutes(item.start) + STEP));
   state.data.schedules = state.data.schedules.filter((schedule) => schedule.id !== item.id).concat(item);
   state.editingSchedule = null;
   scheduleSave();
@@ -345,6 +354,14 @@ function closeForms() {
   state.editingQuest = null;
   state.dragDraft = null;
   render();
+}
+
+function syncScheduleEndTime(startInput) {
+  const form = startInput.closest("form");
+  const endInput = form?.querySelector('input[name="end"]');
+  if (!endInput) return;
+  endInput.min = startInput.value;
+  endInput.value = startInput.value;
 }
 
 function timelineMinutesFromEvent(event, element) {
@@ -467,7 +484,7 @@ function renderDay(items) {
     </section>
     <section class="summary">
       <article><span>오늘 달성률</span><strong>${rate}%</strong><small>${items.filter((item) => item.done).length}/${items.length}개 완료</small></article>
-      <article><span>예정 시간</span><strong>${items.reduce((sum, item) => sum + duration(item), 0)}분</strong><small>5분 단위 조정</small></article>
+      <article><span>예정 시간</span><strong>${formatDuration(items.reduce((sum, item) => sum + duration(item), 0))}</strong><small>5분 단위 조정</small></article>
     </section>
     <section class="panel">
       <div class="panel-head"><div><h2>${shortDate(state.selectedDate)}</h2><p>빈 시간을 드래그하면 5분 단위로 새 일정이 만들어집니다.</p></div><span>${items.length}개 일정</span></div>
@@ -481,6 +498,9 @@ function renderTimeline(items) {
   const marks = [];
   for (let minutes = DAY_START; minutes <= DAY_END; minutes += 60) {
     marks.push(`<div class="time-mark" style="top:${(minutes - DAY_START) * PX_PER_MINUTE}px">${minutesToTime(minutes)}</div>`);
+  }
+  if (marks[marks.length - 1] && !marks[marks.length - 1].includes(minutesToTime(DAY_END))) {
+    marks.push(`<div class="time-mark" style="top:${(DAY_END - DAY_START) * PX_PER_MINUTE}px">${minutesToTime(DAY_END)}</div>`);
   }
   return `
     <div class="timeline-wrap">
@@ -503,7 +523,7 @@ function renderScheduleItem(item) {
   return `
     <article class="schedule-item ${item.done ? "done" : ""}">
       <time>${item.start}<span>${item.end}</span></time>
-      <div><strong>${escapeHtml(item.title)}</strong><p>${categoryLabel(item.category)} · ${duration(item)}분${item.memo ? ` · ${escapeHtml(item.memo)}` : ""}</p></div>
+      <div><strong>${escapeHtml(item.title)}</strong><p>${categoryLabel(item.category)} · ${formatDuration(duration(item))}${item.memo ? ` · ${escapeHtml(item.memo)}` : ""}</p></div>
       <div class="row-actions">
         <button type="button" class="round" onclick="toggleSchedule('${item.id}')" title="완료">${icon("check")}</button>
         <button type="button" class="round subtle" onclick="openScheduleForm('${item.id}')" title="수정">${icon("edit")}</button>
@@ -563,7 +583,7 @@ function renderScheduleSheet() {
         <form class="form" onsubmit="saveSchedule(event)">
           ${isAdmin() ? `<label>아이<select name="studentId">${state.data.students.map((student) => `<option value="${student.id}" ${student.id === item.studentId ? "selected" : ""}>${student.name}</option>`).join("")}</select></label>` : ""}
           <label>날짜<input name="date" type="date" value="${item.date}" /></label>
-          <div class="form-row"><label>시작<input name="start" type="time" step="300" value="${item.start}" /></label><label>종료<input name="end" type="time" step="300" value="${item.end}" /></label></div>
+          <div class="form-row"><label>시작<input name="start" type="time" step="300" min="${minutesToTime(DAY_START)}" max="${minutesToTime(DAY_END - STEP)}" value="${item.start}" onchange="syncScheduleEndTime(this)" /></label><label>종료<input name="end" type="time" step="300" min="${item.start}" max="${minutesToTime(DAY_END)}" value="${item.end}" /></label></div>
           <label>일정명<input name="title" value="${escapeAttr(item.title)}" placeholder="예: 수학 문제풀이" /></label>
           <label>분류<select name="category">${["study", "habit", "play", "chore", "rest"].map((value) => `<option value="${value}" ${value === item.category ? "selected" : ""}>${categoryLabel(value)}</option>`).join("")}</select></label>
           <label>메모<textarea name="memo" placeholder="준비물, 장소, 보상 등을 적어주세요.">${escapeHtml(item.memo || "")}</textarea></label>
@@ -620,6 +640,7 @@ Object.assign(window, {
   addQuestProgress,
   deleteQuest,
   closeForms,
+  syncScheduleEndTime,
   timelinePointerDown,
   timelinePointerMove,
   timelinePointerUp,
