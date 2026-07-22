@@ -20,7 +20,7 @@ function defaultData() {
     students: [
       { id: "hyeon1", name: "옥승현", color: "#3182f6" },
       { id: "hyeon2", name: "옥수현", color: "#03b26c" },
-      { id: "hyeon3", name: "셋째 아들", color: "#8b5cf6" },
+      { id: "hyeon3", name: "옥서현", color: "#8b5cf6" },
     ],
     schedules: [
       seedSchedule("hyeon1", TODAY, "09:00", "09:50", "수학 문제풀이", "study"),
