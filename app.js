@@ -431,13 +431,16 @@ function renderLogin() {
   app.innerHTML = `
     <main class="login-screen">
       <section class="login-hero">
-        <p class="eyebrow">방학 루틴</p>
+        <figure class="family-logo">
+          <img src="./assets/ok-family-logo.jpg" alt="OK Family SH Happy together" />
+        </figure>
+        <p class="eyebrow">OK Family Routine</p>
         <h1>누가 사용할까요?</h1>
-        <p>관리자는 세 아들의 일과를 조정하고, 아이들은 자기 일정과 퀘스트만 확인합니다.</p>
+        <p>방학 일과, 퀘스트, 버킷리스트를 가족이 함께 보고 관리합니다.</p>
       </section>
       <section class="login-options">
-        <button type="button" class="admin-login" onclick="login('admin')"><strong>관리자</strong><span>전체 일정 관리</span></button>
-        ${state.data.students.map((student) => `<button type="button" onclick="login('student', '${student.id}')"><strong>${student.name}</strong><span>${student.id}</span></button>`).join("")}
+        <button type="button" class="login-card admin-login" onclick="login('admin')"><span class="login-icon">A</span><strong>관리자</strong><small>세 아들 전체 일정 관리</small></button>
+        ${state.data.students.map((student) => `<button type="button" class="login-card" onclick="login('student', '${student.id}')"><span class="login-icon" style="--student-color:${student.color}">${student.name.slice(-2, -1)}</span><strong>${student.name}</strong><small>${student.id}</small></button>`).join("")}
       </section>
     </main>
   `;
