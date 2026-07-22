@@ -803,10 +803,13 @@ function renderQuests() {
 function renderQuest(quest) {
   const rate = Math.min(100, Math.round((Number(quest.progress || 0) / Number(quest.target || 1)) * 100));
   const points = questPointsByCreator(quest.createdBy);
+  const progress = Number(quest.progress || 0);
+  const target = Number(quest.target || 1);
+  const progressText = target === 1 ? (quest.done ? "완료" : "한 번 지키면 완료") : `${progress}/${target}회`;
   return `
     <article class="quest ${quest.done ? "done" : ""}">
-      <div><span class="badge ${quest.type}">${quest.type === "must" ? "완료 과제" : "버킷리스트"}</span><span class="badge source">${creatorLabel(quest.createdBy)} ${points}P</span><strong>${escapeHtml(quest.title)}</strong><p>${quest.studentId === "all" ? "공통" : studentName(quest.studentId)}${quest.note ? ` · ${escapeHtml(quest.note)}` : ""}</p><div class="bar"><span style="width:${rate}%"></span></div></div>
-      <div class="quest-actions"><button type="button" class="round" onclick="addQuestProgress('${quest.id}')" title="진행 +1">${icon("check")}</button><button type="button" class="round subtle" onclick="openQuestForm('${quest.id}')" title="수정">${icon("edit")}</button></div>
+      <div><span class="badge ${quest.type}">${quest.type === "must" ? "완료 과제" : "버킷리스트"}</span><span class="badge source">${creatorLabel(quest.createdBy)} ${points}P</span><strong>${escapeHtml(quest.title)}</strong><p>${quest.studentId === "all" ? "공통" : studentName(quest.studentId)} · ${progressText}${quest.note ? ` · ${escapeHtml(quest.note)}` : ""}</p><div class="bar"><span style="width:${rate}%"></span></div></div>
+      <div class="quest-actions"><button type="button" class="round" onclick="addQuestProgress('${quest.id}')" title="한 번 했어요">${icon("check")}</button><button type="button" class="round subtle" onclick="openQuestForm('${quest.id}')" title="수정">${icon("edit")}</button></div>
     </article>
   `;
 }
@@ -855,7 +858,8 @@ function renderQuestSheet() {
           <label>퀘스트명<input name="title" value="${escapeAttr(quest.title)}" placeholder="예: 자전거 타고 한강 가기" /></label>
           <label>유형<select name="type"><option value="bucket" ${quest.type === "bucket" ? "selected" : ""}>버킷리스트</option><option value="must" ${quest.type === "must" ? "selected" : ""}>완료 과제</option></select></label>
           ${isAdmin() ? `<label>출처<select name="createdBy"><option value="parent" ${quest.createdBy !== "student" ? "selected" : ""}>부모 퀘스트 (${PARENT_QUEST_POINTS}P)</option><option value="student" ${quest.createdBy === "student" ? "selected" : ""}>아이 직접 퀘스트 (${SELF_QUEST_POINTS}P)</option></select></label>` : `<input type="hidden" name="createdBy" value="student" /><div class="point-hint">직접 만든 퀘스트 완료 시 ${SELF_QUEST_POINTS}P</div>`}
-          <div class="form-row"><label>진행<input name="progress" type="number" min="0" step="1" value="${quest.progress || 0}" /></label><label>목표<input name="target" type="number" min="1" step="1" value="${quest.target || 1}" /></label></div>
+          <div class="form-row"><label>현재 횟수<input name="progress" type="number" min="0" step="1" value="${quest.progress || 0}" /></label><label>완료 기준<input name="target" type="number" min="1" step="1" value="${quest.target || 1}" /></label></div>
+          <div class="point-hint">예: 하루 약속은 완료 기준 1, 독서 5권은 완료 기준 5로 입력하세요.</div>
           <label>메모<textarea name="note" placeholder="완료 조건이나 약속을 적어주세요.">${escapeHtml(quest.note || "")}</textarea></label>
           <label class="check"><input name="done" type="checkbox" ${quest.done ? "checked" : ""} /> 완료</label>
           <div class="form-actions">${existing ? `<button type="button" class="danger" onclick="deleteQuest('${quest.id}')">${icon("trash")}삭제</button>` : ""}<button type="submit" class="primary">저장</button></div>
