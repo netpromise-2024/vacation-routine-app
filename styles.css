@@ -734,6 +734,52 @@ textarea {
   font-weight: 800;
 }
 
+.point-sources {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.point-sources button {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  color: var(--grey-700);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(232, 232, 236, 0.78);
+  text-align: left;
+}
+
+.point-sources span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.point-sources strong {
+  flex: 0 0 auto;
+  color: var(--bv-blue);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 900;
+}
+
+.point-sources-empty {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+}
+
 .panel {
   margin: 0 12px;
   padding: 22px 16px;

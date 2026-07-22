@@ -296,24 +296,36 @@ function pointStatsFor(studentId, dates = null) {
   const datesForStudy = dateSet || new Set(schedules.map((item) => item.date));
   let studyMinutes = 0;
   let studyPoints = 0;
+  let schedulePoints = 0;
+  const sources = [];
   const studyTargetMetDates = new Set();
   datesForStudy.forEach((date) => {
     const dayStudyMinutes = schedules.filter((item) => item.date === date && item.category === "study").reduce((sum, item) => sum + duration(item), 0);
+    const dayStudyPoints = studyPointsFor(dayStudyMinutes);
+    const daySchedulePoints = dayStudyMinutes >= DAILY_STUDY_TARGET_MINUTES ? schedules.filter((item) => item.date === date && item.createdBy === "parent").length * PARENT_SCHEDULE_POINTS : 0;
     studyMinutes += dayStudyMinutes;
-    studyPoints += studyPointsFor(dayStudyMinutes);
-    if (dayStudyMinutes >= DAILY_STUDY_TARGET_MINUTES) studyTargetMetDates.add(date);
+    studyPoints += dayStudyPoints;
+    schedulePoints += daySchedulePoints;
+    if (dayStudyMinutes >= DAILY_STUDY_TARGET_MINUTES) {
+      studyTargetMetDates.add(date);
+      if (dayStudyPoints || daySchedulePoints) sources.push({ date, label: `${shortDate(date)} 공부/일정`, points: dayStudyPoints + daySchedulePoints });
+    }
   });
-  const schedulePoints = schedules.filter((item) => item.createdBy === "parent" && studyTargetMetDates.has(item.date)).length * PARENT_SCHEDULE_POINTS;
-  const questPoints = state.data.quests
+  const quests = state.data.quests
     .filter((quest) => (quest.studentId === "all" || quest.studentId === studentId) && quest.done)
-    .filter((quest) => !dateSet || dateSet.has(completionDate(quest)))
-    .reduce((sum, quest) => sum + questPointsByCreator(quest.createdBy), 0);
+    .filter((quest) => !dateSet || dateSet.has(completionDate(quest)));
+  const questPoints = quests.reduce((sum, quest) => sum + questPointsByCreator(quest.createdBy), 0);
+  quests.forEach((quest) => sources.push({ date: completionDate(quest) || state.selectedDate, label: `퀘스트 · ${quest.title}`, points: questPointsByCreator(quest.createdBy) }));
+  state.data.schedules
+    .filter((item) => item.studentId === studentId && item.approvalStatus === "missed" && (!dateSet || dateSet.has(item.date)))
+    .forEach((item) => sources.push({ date: item.date, label: `${shortDate(item.date)} 미수행`, points: Number(item.penalty || MISSED_SCHEDULE_PENALTY) }));
   return {
     studyMinutes,
     studyPoints,
     schedulePoints,
     questPoints,
     penalties,
+    sources,
     total: studyPoints + schedulePoints + questPoints + penalties,
   };
 }
@@ -767,7 +779,17 @@ function renderRewardPanel(stats, reward) {
         <span>퀘스트 ${stats.questPoints}P</span>
         <span>감점 ${stats.penalties}P</span>
       </div>
+      ${renderPointSources(stats.sources)}
     </section>
+  `;
+}
+
+function renderPointSources(sources = []) {
+  if (!sources.length) return `<p class="point-sources-empty">이번 주 적립 기록이 없습니다.</p>`;
+  return `
+    <div class="point-sources">
+      ${sources.map((source) => `<button type="button" onclick="setDate('${source.date}')"><span>${escapeHtml(source.label)}</span><strong>${source.points > 0 ? "+" : ""}${source.points}P</strong></button>`).join("")}
+    </div>
   `;
 }
 
