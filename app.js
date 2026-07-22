@@ -293,9 +293,17 @@ function pointStatsFor(studentId, dates = null) {
   const penalties = state.data.schedules
     .filter((item) => item.studentId === studentId && item.approvalStatus === "missed" && (!dateSet || dateSet.has(item.date)))
     .reduce((sum, item) => sum + Number(item.penalty || MISSED_SCHEDULE_PENALTY), 0);
-  const studyMinutes = schedules.filter((item) => item.category === "study").reduce((sum, item) => sum + duration(item), 0);
-  const studyPoints = studyPointsFor(studyMinutes);
-  const schedulePoints = schedules.filter((item) => item.createdBy === "parent").length * PARENT_SCHEDULE_POINTS;
+  const datesForStudy = dateSet || new Set(schedules.map((item) => item.date));
+  let studyMinutes = 0;
+  let studyPoints = 0;
+  const studyTargetMetDates = new Set();
+  datesForStudy.forEach((date) => {
+    const dayStudyMinutes = schedules.filter((item) => item.date === date && item.category === "study").reduce((sum, item) => sum + duration(item), 0);
+    studyMinutes += dayStudyMinutes;
+    studyPoints += studyPointsFor(dayStudyMinutes);
+    if (dayStudyMinutes >= DAILY_STUDY_TARGET_MINUTES) studyTargetMetDates.add(date);
+  });
+  const schedulePoints = schedules.filter((item) => item.createdBy === "parent" && studyTargetMetDates.has(item.date)).length * PARENT_SCHEDULE_POINTS;
   const questPoints = state.data.quests
     .filter((quest) => (quest.studentId === "all" || quest.studentId === studentId) && quest.done)
     .filter((quest) => !dateSet || dateSet.has(completionDate(quest)))

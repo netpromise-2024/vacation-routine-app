@@ -1,0 +1,68 @@
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+
+const appPath = path.join(__dirname, "..", "app.js");
+const appCode = fs.readFileSync(appPath, "utf8");
+
+const storage = new Map();
+const context = {
+  console,
+  setTimeout,
+  clearTimeout,
+  crypto: { randomUUID: () => `test-${Math.random().toString(16).slice(2)}` },
+  localStorage: {
+    getItem: (key) => storage.get(key) || null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key),
+  },
+  document: {
+    querySelector: () => ({ innerHTML: "" }),
+  },
+  fetch: async () => {
+    throw new Error("network disabled in point test");
+  },
+  window: {},
+};
+
+vm.runInNewContext(
+  `${appCode}
+window.__pointsTest = { state, pointStatsFor, normalizeData };`,
+  context,
+);
+
+const date = "2026-07-22";
+context.window.__pointsTest.state.data = context.window.__pointsTest.normalizeData({
+  students: [{ id: "hyeon1", name: "옥승현", color: "#3182f6" }],
+  schedules: [
+    { id: "study-1", studentId: "hyeon1", date, start: "09:00", end: "10:10", title: "study", category: "study", done: true, createdBy: "parent", approvalStatus: "approved" },
+    { id: "study-2", studentId: "hyeon1", date, start: "10:20", end: "11:30", title: "study", category: "study", done: true, createdBy: "parent", approvalStatus: "approved" },
+    { id: "habit-1", studentId: "hyeon1", date, start: "13:00", end: "13:30", title: "habit", category: "habit", done: true, createdBy: "parent", approvalStatus: "approved" },
+  ],
+  quests: [],
+});
+
+const underTarget = context.window.__pointsTest.pointStatsFor("hyeon1", [date]);
+if (underTarget.studyMinutes !== 140 || underTarget.total !== 0) {
+  throw new Error(`Expected 0P below daily target, received ${underTarget.total}P`);
+}
+
+context.window.__pointsTest.state.data.schedules.push({
+  id: "study-3",
+  studentId: "hyeon1",
+  date,
+  start: "14:00",
+  end: "14:40",
+  title: "study",
+  category: "study",
+  done: true,
+  createdBy: "parent",
+  approvalStatus: "approved",
+});
+
+const targetMet = context.window.__pointsTest.pointStatsFor("hyeon1", [date]);
+if (targetMet.studyMinutes !== 180 || targetMet.studyPoints !== 10 || targetMet.schedulePoints !== 40 || targetMet.total !== 50) {
+  throw new Error(`Expected 50P at daily target, received ${JSON.stringify(targetMet)}`);
+}
+
+console.log("vacation routine point rules passed");
