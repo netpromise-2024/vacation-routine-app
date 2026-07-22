@@ -455,6 +455,16 @@ function setScheduleApproval(id, approvalStatus) {
   render();
 }
 
+function focusSchedule(id) {
+  const item = state.data.schedules.find((schedule) => schedule.id === id);
+  if (!item) return;
+  state.selectedStudent = item.studentId;
+  state.selectedDate = item.date;
+  state.view = "day";
+  state.editingSchedule = item;
+  render();
+}
+
 function deleteSchedule(id) {
   state.data.schedules = state.data.schedules.filter((item) => item.id !== id);
   state.editingSchedule = null;
@@ -589,7 +599,7 @@ function render() {
         <div>
           <p class="eyebrow">${isAdmin() ? "관리자 화면" : "개인 화면"}</p>
           <h1>${isAdmin() ? "방학 일과 관리" : `${student.name}의 오늘`}</h1>
-          <span class="sync ${state.syncStatus === "online" ? "online" : ""}">${state.syncStatus === "online" ? "서버 동기화" : state.syncStatus === "syncing" ? "동기화 확인" : "기기 저장"}</span>
+          <button type="button" class="sync ${state.syncStatus === "online" ? "online" : ""}" onclick="loadRemote()">${state.syncStatus === "online" ? "서버 동기화" : state.syncStatus === "syncing" ? "동기화 확인" : "기기 저장"}</button>
         </div>
         <div class="top-actions">
           <div class="level"><strong>Lv.${levelFor(points)}</strong><span>${points}P</span></div>
@@ -597,6 +607,7 @@ function render() {
         </div>
       </header>
       ${isAdmin() ? renderStudentTabs() : renderPersonalBadge(student)}
+      ${isAdmin() ? renderApprovalQueue() : ""}
       <nav class="tabs">
         ${tabButton("day", "day", "일 보기")}
         ${tabButton("week", "week", "주 보기")}
@@ -630,6 +641,38 @@ function renderLogin() {
 
 function renderStudentTabs() {
   return `<section class="students">${state.data.students.map((student) => `<button type="button" class="${student.id === state.selectedStudent ? "active" : ""}" onclick="selectStudent('${student.id}')"><span>${student.name}</span><small>${pointsFor(student.id)}P</small></button>`).join("")}</section>`;
+}
+
+function approvalQueueItems() {
+  return state.data.schedules
+    .filter((item) => item.approvalStatus === "pending" || item.approvalStatus === "change_requested")
+    .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+}
+
+function renderApprovalQueue() {
+  const items = approvalQueueItems();
+  return `
+    <section class="approval-queue">
+      <div class="approval-head"><strong>승인 대기함</strong><span>${items.length}건</span></div>
+      ${items.length ? `<div class="approval-list">${items.slice(0, 5).map(renderApprovalQueueItem).join("")}</div>` : `<p class="approval-empty">아들이 올린 승인 대기 계획이 없습니다.</p>`}
+    </section>
+  `;
+}
+
+function renderApprovalQueueItem(item) {
+  return `
+    <article class="approval-card">
+      <button type="button" class="approval-main" onclick="focusSchedule('${item.id}')">
+        <span>${studentName(item.studentId)} · ${shortDate(item.date)} · ${item.start}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${approvalLabel(item.approvalStatus)} · ${categoryLabel(item.category)} · ${formatDuration(duration(item))}</small>
+      </button>
+      <div class="approval-actions">
+        <button type="button" class="mini success" onclick="setScheduleApproval('${item.id}', 'approved')">승인</button>
+        <button type="button" class="mini subtle" onclick="setScheduleApproval('${item.id}', 'rejected')">반려</button>
+      </div>
+    </article>
+  `;
 }
 
 function renderPersonalBadge(student) {
@@ -833,6 +876,7 @@ function escapeAttr(value) {
 Object.assign(window, {
   login,
   logout,
+  loadRemote,
   selectStudent,
   switchView,
   setDate,
@@ -840,6 +884,7 @@ Object.assign(window, {
   saveSchedule,
   toggleSchedule,
   setScheduleApproval,
+  focusSchedule,
   deleteSchedule,
   openQuestForm,
   saveQuest,

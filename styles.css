@@ -352,6 +352,92 @@ h2 {
   opacity: 0.82;
 }
 
+.approval-queue {
+  padding: 14px 20px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.approval-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.approval-head strong {
+  color: var(--grey-950);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 900;
+}
+
+.approval-head span {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: var(--bv-blue);
+  background: rgba(68, 52, 226, 0.1);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 900;
+}
+
+.approval-list {
+  display: grid;
+  gap: 8px;
+}
+
+.approval-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(68, 52, 226, 0.15);
+  border-radius: var(--r-md);
+  background: rgba(68, 52, 226, 0.05);
+}
+
+.approval-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  color: var(--text);
+  text-align: left;
+}
+
+.approval-main span,
+.approval-main small,
+.approval-empty {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+}
+
+.approval-main strong {
+  overflow: hidden;
+  color: var(--grey-950);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.approval-empty {
+  margin: 0;
+}
+
 .personal-badge {
   display: flex;
   align-items: center;
@@ -1199,6 +1285,18 @@ button:active {
   .students button {
     min-height: 58px;
     padding: 9px 10px;
+  }
+
+  .approval-queue {
+    padding: 13px 18px 15px;
+  }
+
+  .approval-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .approval-actions {
+    justify-content: flex-end;
   }
 
   .students span {
