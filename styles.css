@@ -528,9 +528,11 @@ textarea {
   display: block;
   margin-top: 8px;
   color: var(--grey-950);
-  font-size: 30px;
-  line-height: 38px;
+  font-size: clamp(25px, 6.4vw, 30px);
+  line-height: 1.18;
   font-weight: 800;
+  letter-spacing: 0;
+  word-break: keep-all;
 }
 
 .summary small {
@@ -569,9 +571,10 @@ textarea {
   display: block;
   margin-top: 4px;
   color: var(--grey-950);
-  font-size: 30px;
-  line-height: 38px;
+  font-size: clamp(26px, 6.6vw, 30px);
+  line-height: 1.18;
   font-weight: 900;
+  letter-spacing: 0;
 }
 
 .reward-head p {
@@ -1079,17 +1082,164 @@ button:active {
 
 @media (max-width: 480px) {
   .top {
-    padding-top: 22px;
+    gap: 12px;
+    padding: 22px 18px 16px;
   }
 
   h1 {
-    font-size: 26px;
+    font-size: 28px;
     line-height: 36px;
   }
 
   .login-hero h1 {
     font-size: 31px;
     line-height: 40px;
+  }
+
+  .eyebrow {
+    font-size: 13px;
+    line-height: 19px;
+  }
+
+  .sync {
+    min-height: 24px;
+    margin-top: 8px;
+    padding: 0 9px;
+    font-size: 11px;
+    line-height: 17px;
+  }
+
+  .level {
+    min-width: 66px;
+    padding: 10px 9px;
+    border-radius: 17px;
+  }
+
+  .level strong {
+    font-size: 18px;
+    line-height: 23px;
+  }
+
+  .level span {
+    font-size: 11px;
+    line-height: 16px;
+  }
+
+  .logout {
+    width: 42px;
+    height: 42px;
+  }
+
+  .students {
+    gap: 7px;
+    padding: 12px 18px 14px;
+  }
+
+  .students button {
+    min-height: 58px;
+    padding: 9px 10px;
+  }
+
+  .students span {
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .tabs {
+    gap: 7px;
+    padding: 9px 18px;
+  }
+
+  .tabs button {
+    min-height: 46px;
+    gap: 6px;
+    font-size: 13px;
+    line-height: 19px;
+  }
+
+  .toolbar {
+    gap: 9px;
+    padding: 0 18px 12px;
+  }
+
+  .toolbar .primary {
+    min-width: 86px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 46px;
+    padding: 10px 12px;
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  .primary,
+  .danger,
+  .round {
+    min-height: 44px;
+    padding: 0 13px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .summary {
+    gap: 9px;
+    padding: 0 18px 13px;
+  }
+
+  .summary article {
+    min-height: 104px;
+    padding: 15px;
+    border-radius: 20px;
+  }
+
+  .summary span {
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .summary strong {
+    margin-top: 7px;
+    font-size: 26px;
+    line-height: 32px;
+  }
+
+  .summary small {
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .reward-panel {
+    margin: 0 18px 16px;
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .reward-head strong {
+    font-size: 27px;
+    line-height: 34px;
+  }
+
+  .reward-head p {
+    font-size: 13px;
+    line-height: 20px;
+  }
+
+  .reward-breakdown {
+    gap: 6px;
+  }
+
+  .reward-breakdown span {
+    min-height: 26px;
+    padding: 0 9px;
+    font-size: 11px;
+    line-height: 17px;
+  }
+
+  .panel {
+    margin: 0 10px;
   }
 
   .week-grid {
@@ -1110,9 +1260,5 @@ button:active {
   .reward-head p {
     margin-top: 8px;
     text-align: left;
-  }
-
-  .students span {
-    font-size: 14px;
   }
 }
