@@ -7,6 +7,7 @@ const DAY_END = 23 * 60 + 30;
 const AXIS_END = 24 * 60;
 const STEP = 5;
 const PX_PER_MINUTE = 1.25;
+const DAILY_STUDY_TARGET_MINUTES = 180;
 const STUDY_BASE_MINUTES = 180;
 const STUDY_BASE_POINTS = 10;
 const STUDY_BONUS_STEP_MINUTES = 30;
@@ -321,6 +322,11 @@ function rewardFor(points) {
 
 function money(amount) {
   return `${Number(amount || 0).toLocaleString("ko-KR")}원`;
+}
+
+function dailyStudyText(minutes) {
+  const remaining = Math.max(0, DAILY_STUDY_TARGET_MINUTES - minutes);
+  return remaining ? `3시간까지 ${formatDuration(remaining)} 남음` : "3시간 기본 달성";
 }
 
 function creatorLabel(createdBy) {
@@ -639,7 +645,7 @@ function renderDay(items) {
     <section class="summary">
       <article><span>오늘 달성률</span><strong>${rate}%</strong><small>${items.filter((item) => item.done).length}/${items.length}개 완료</small></article>
       <article><span>예정 시간</span><strong>${formatDuration(items.reduce((sum, item) => sum + duration(item), 0))}</strong><small>5분 단위 조정</small></article>
-      <article><span>오늘 포인트</span><strong>${todayStats.total}P</strong><small>감점 ${todayStats.penalties}P</small></article>
+      <article><span>오늘 순공부</span><strong>${formatDuration(todayStats.studyMinutes)}</strong><small>${dailyStudyText(todayStats.studyMinutes)}</small></article>
       <article><span>이번 주 보상</span><strong>${money(reward.amount)}</strong><small>${weekStats.total}/${WEEKLY_REWARD_TARGET}P</small></article>
     </section>
     ${renderRewardPanel(weekStats, reward)}
