@@ -7,6 +7,17 @@ const DAY_END = 23 * 60 + 30;
 const AXIS_END = 24 * 60;
 const STEP = 5;
 const PX_PER_MINUTE = 1.25;
+const STUDY_BASE_MINUTES = 180;
+const STUDY_BASE_POINTS = 10;
+const STUDY_BONUS_STEP_MINUTES = 30;
+const STUDY_BONUS_POINTS = 5;
+const PARENT_SCHEDULE_POINTS = 10;
+const SELF_QUEST_POINTS = 50;
+const PARENT_QUEST_POINTS = 100;
+const WEEKLY_REWARD_TARGET = 500;
+const WEEKLY_REWARD_BASE = 50000;
+const WEEKLY_REWARD_STEP_POINTS = 50;
+const WEEKLY_REWARD_STEP_AMOUNT = 5000;
 const app = document.querySelector("#app");
 
 let state = {
@@ -44,12 +55,13 @@ function defaultData() {
   };
 }
 
-function seedSchedule(studentId, date, start, end, title, category) {
-  return { id: cryptoId(), studentId, date, start, end, title, category, memo: "", done: false, updatedAt: new Date().toISOString() };
+function seedSchedule(studentId, date, start, end, title, category, createdBy = "parent") {
+  return { id: cryptoId(), studentId, date, start, end, title, category, memo: "", done: false, createdBy, completedAt: "", updatedAt: new Date().toISOString() };
 }
 
-function seedQuest(studentId, title, type, points, progress, target) {
-  return { id: cryptoId(), studentId, title, type, points, progress, target, done: progress >= target, note: "", updatedAt: new Date().toISOString() };
+function seedQuest(studentId, title, type, points, progress, target, createdBy = "parent") {
+  const done = progress >= target;
+  return { id: cryptoId(), studentId, title, type, points, progress, target, done, createdBy, completedAt: done ? new Date().toISOString() : "", note: "", updatedAt: new Date().toISOString() };
 }
 
 function cryptoId() {
@@ -89,8 +101,28 @@ function normalizeData(data) {
   }));
   return {
     students,
-    schedules: Array.isArray(data?.schedules) ? data.schedules : fallback.schedules,
-    quests: Array.isArray(data?.quests) ? data.quests : fallback.quests,
+    schedules: (Array.isArray(data?.schedules) ? data.schedules : fallback.schedules).map(normalizeSchedule),
+    quests: (Array.isArray(data?.quests) ? data.quests : fallback.quests).map(normalizeQuest),
+  };
+}
+
+function normalizeSchedule(item) {
+  return {
+    ...item,
+    createdBy: item.createdBy || "parent",
+    completedAt: item.done ? item.completedAt || item.updatedAt || "" : "",
+  };
+}
+
+function normalizeQuest(quest) {
+  const createdBy = quest.createdBy || "parent";
+  const done = Boolean(quest.done || Number(quest.progress || 0) >= Number(quest.target || 1));
+  return {
+    ...quest,
+    createdBy,
+    points: questPointsByCreator(createdBy),
+    done,
+    completedAt: done ? quest.completedAt || quest.updatedAt || "" : "",
   };
 }
 
@@ -238,7 +270,53 @@ function visibleQuests() {
 }
 
 function pointsFor(studentId) {
-  return state.data.quests.filter((quest) => (quest.studentId === "all" || quest.studentId === studentId) && quest.done).reduce((sum, quest) => sum + Number(quest.points || 0), 0);
+  return pointStatsFor(studentId).total;
+}
+
+function questPointsByCreator(createdBy) {
+  return createdBy === "student" ? SELF_QUEST_POINTS : PARENT_QUEST_POINTS;
+}
+
+function studyPointsFor(minutes) {
+  if (minutes < STUDY_BASE_MINUTES) return 0;
+  return STUDY_BASE_POINTS + Math.floor((minutes - STUDY_BASE_MINUTES) / STUDY_BONUS_STEP_MINUTES) * STUDY_BONUS_POINTS;
+}
+
+function pointStatsFor(studentId, dates = null) {
+  const dateSet = dates ? new Set(dates) : null;
+  const schedules = state.data.schedules.filter((item) => item.studentId === studentId && item.done && (!dateSet || dateSet.has(item.date)));
+  const studyMinutes = schedules.filter((item) => item.category === "study").reduce((sum, item) => sum + duration(item), 0);
+  const studyPoints = studyPointsFor(studyMinutes);
+  const schedulePoints = schedules.filter((item) => item.createdBy === "parent").length * PARENT_SCHEDULE_POINTS;
+  const questPoints = state.data.quests
+    .filter((quest) => (quest.studentId === "all" || quest.studentId === studentId) && quest.done)
+    .filter((quest) => !dateSet || dateSet.has(completionDate(quest)))
+    .reduce((sum, quest) => sum + questPointsByCreator(quest.createdBy), 0);
+  return {
+    studyMinutes,
+    studyPoints,
+    schedulePoints,
+    questPoints,
+    total: studyPoints + schedulePoints + questPoints,
+  };
+}
+
+function completionDate(item) {
+  return String(item.completedAt || item.updatedAt || "").slice(0, 10);
+}
+
+function rewardFor(points) {
+  if (points < WEEKLY_REWARD_TARGET) return { amount: 0, next: WEEKLY_REWARD_TARGET - points };
+  const bonus = Math.floor((points - WEEKLY_REWARD_TARGET) / WEEKLY_REWARD_STEP_POINTS) * WEEKLY_REWARD_STEP_AMOUNT;
+  return { amount: WEEKLY_REWARD_BASE + bonus, next: WEEKLY_REWARD_STEP_POINTS - ((points - WEEKLY_REWARD_TARGET) % WEEKLY_REWARD_STEP_POINTS || WEEKLY_REWARD_STEP_POINTS) };
+}
+
+function money(amount) {
+  return `${Number(amount || 0).toLocaleString("ko-KR")}원`;
+}
+
+function creatorLabel(createdBy) {
+  return createdBy === "student" ? "직접 등록" : "부모 공유";
 }
 
 function levelFor(points) {
@@ -276,6 +354,8 @@ function openScheduleForm(id = "", draft = null) {
 function saveSchedule(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
+  const existing = state.data.schedules.find((schedule) => schedule.id === state.editingSchedule.id);
+  const done = form.get("done") === "on";
   const item = {
     id: state.editingSchedule.id || cryptoId(),
     studentId: isAdmin() ? form.get("studentId") : state.session.studentId,
@@ -285,7 +365,9 @@ function saveSchedule(event) {
     title: form.get("title").trim(),
     category: form.get("category"),
     memo: form.get("memo").trim(),
-    done: form.get("done") === "on",
+    done,
+    createdBy: isAdmin() ? form.get("createdBy") || "parent" : "student",
+    completedAt: done ? existing?.completedAt || new Date().toISOString() : "",
     updatedAt: new Date().toISOString(),
   };
   if (!item.title) return;
@@ -297,7 +379,11 @@ function saveSchedule(event) {
 }
 
 function toggleSchedule(id) {
-  state.data.schedules = state.data.schedules.map((item) => (item.id === id ? { ...item, done: !item.done, updatedAt: new Date().toISOString() } : item));
+  state.data.schedules = state.data.schedules.map((item) => {
+    if (item.id !== id) return item;
+    const done = !item.done;
+    return { ...item, done, completedAt: done ? new Date().toISOString() : "", updatedAt: new Date().toISOString() };
+  });
   scheduleSave();
   render();
 }
@@ -319,15 +405,20 @@ function saveQuest(event) {
   const form = new FormData(event.currentTarget);
   const progress = Math.max(0, Math.round(Number(form.get("progress") || 0)));
   const target = Math.max(1, Math.round(Number(form.get("target") || 1)));
+  const existing = state.data.quests.find((quest) => quest.id === state.editingQuest.id);
+  const createdBy = isAdmin() ? form.get("createdBy") || "parent" : "student";
+  const done = progress >= target || form.get("done") === "on";
   const item = {
     id: state.editingQuest.id || cryptoId(),
     studentId: isAdmin() ? form.get("studentId") : state.session.studentId,
     title: form.get("title").trim(),
     type: form.get("type"),
-    points: Math.max(0, Math.round(Number(form.get("points") || 0))),
+    points: questPointsByCreator(createdBy),
     progress,
     target,
-    done: progress >= target || form.get("done") === "on",
+    done,
+    createdBy,
+    completedAt: done ? existing?.completedAt || new Date().toISOString() : "",
     note: form.get("note").trim(),
     updatedAt: new Date().toISOString(),
   };
@@ -342,7 +433,8 @@ function addQuestProgress(id) {
   state.data.quests = state.data.quests.map((quest) => {
     if (quest.id !== id) return quest;
     const progress = Math.min(quest.target, Number(quest.progress || 0) + 1);
-    return { ...quest, progress, done: progress >= quest.target, updatedAt: new Date().toISOString() };
+    const done = progress >= quest.target;
+    return { ...quest, progress, done, completedAt: done ? quest.completedAt || new Date().toISOString() : "", updatedAt: new Date().toISOString() };
   });
   scheduleSave();
   render();
@@ -483,6 +575,9 @@ function tabButton(view, iconName, label) {
 
 function renderDay(items) {
   const rate = completionRate(items);
+  const todayStats = pointStatsFor(state.selectedStudent, [state.selectedDate]);
+  const weekStats = pointStatsFor(state.selectedStudent, weekDates(state.selectedDate));
+  const reward = rewardFor(weekStats.total);
   return `
     <section class="toolbar">
       <input type="date" value="${state.selectedDate}" onchange="setDate(this.value)" />
@@ -491,7 +586,10 @@ function renderDay(items) {
     <section class="summary">
       <article><span>오늘 달성률</span><strong>${rate}%</strong><small>${items.filter((item) => item.done).length}/${items.length}개 완료</small></article>
       <article><span>예정 시간</span><strong>${formatDuration(items.reduce((sum, item) => sum + duration(item), 0))}</strong><small>5분 단위 조정</small></article>
+      <article><span>오늘 포인트</span><strong>${todayStats.total}P</strong><small>순공부 ${formatDuration(todayStats.studyMinutes)}</small></article>
+      <article><span>이번 주 보상</span><strong>${money(reward.amount)}</strong><small>${weekStats.total}/${WEEKLY_REWARD_TARGET}P</small></article>
     </section>
+    ${renderRewardPanel(weekStats, reward)}
     <section class="panel">
       <div class="panel-head"><div><h2>${shortDate(state.selectedDate)}</h2><p>빈 시간을 드래그하면 5분 단위로 새 일정이 만들어집니다.</p></div><span>${items.length}개 일정</span></div>
       ${renderTimeline(items)}
@@ -526,7 +624,7 @@ function renderScheduleItem(item) {
   return `
     <article class="schedule-item ${item.done ? "done" : ""}">
       <time>${item.start}<span>${item.end}</span></time>
-      <div><strong>${escapeHtml(item.title)}</strong><p>${categoryLabel(item.category)} · ${formatDuration(duration(item))}${item.memo ? ` · ${escapeHtml(item.memo)}` : ""}</p></div>
+      <div><strong>${escapeHtml(item.title)}</strong><p>${categoryLabel(item.category)} · ${formatDuration(duration(item))} · ${creatorLabel(item.createdBy)}${item.createdBy === "parent" ? ` +${PARENT_SCHEDULE_POINTS}P` : ""}${item.memo ? ` · ${escapeHtml(item.memo)}` : ""}</p></div>
       <div class="row-actions">
         <button type="button" class="round" onclick="toggleSchedule('${item.id}')" title="완료">${icon("check")}</button>
         <button type="button" class="round subtle" onclick="openScheduleForm('${item.id}')" title="수정">${icon("edit")}</button>
@@ -535,10 +633,31 @@ function renderScheduleItem(item) {
   `;
 }
 
+function renderRewardPanel(stats, reward) {
+  const rate = Math.min(100, Math.round((stats.total / WEEKLY_REWARD_TARGET) * 100));
+  const rewardText = reward.amount
+    ? `일요일 저녁 ${money(reward.amount)} · 다음 +5,000원까지 ${reward.next}P`
+    : `${reward.next}P 더 달성하면 ${money(WEEKLY_REWARD_BASE)} 보상`;
+  return `
+    <section class="reward-panel">
+      <div class="reward-head"><div><span>이번 주 포인트</span><strong>${stats.total}P</strong></div><p>${rewardText}</p></div>
+      <div class="reward-meter"><span style="width:${rate}%"></span></div>
+      <div class="reward-breakdown">
+        <span>순공부 ${stats.studyPoints}P</span>
+        <span>부모 일정 ${stats.schedulePoints}P</span>
+        <span>퀘스트 ${stats.questPoints}P</span>
+      </div>
+    </section>
+  `;
+}
+
 function renderWeek() {
   const dates = weekDates(state.selectedDate);
+  const weekStats = pointStatsFor(state.selectedStudent, dates);
+  const reward = rewardFor(weekStats.total);
   return `
     <section class="toolbar"><input type="date" value="${state.selectedDate}" onchange="setDate(this.value)" /><button type="button" class="primary" onclick="openScheduleForm()">${icon("plus")}일정</button></section>
+    ${renderRewardPanel(weekStats, reward)}
     <section class="week-grid">
       ${dates.map((date) => {
         const items = schedulesFor(state.selectedStudent, date);
@@ -552,17 +671,21 @@ function renderWeek() {
 function renderQuests() {
   const quests = visibleQuests();
   const done = quests.filter((quest) => quest.done).length;
+  const weekStats = pointStatsFor(state.selectedStudent, weekDates(state.selectedDate));
+  const reward = rewardFor(weekStats.total);
   return `
     <section class="toolbar"><div class="quest-score"><strong>${done}/${quests.length}</strong><span>퀘스트 완료</span></div><button type="button" class="primary" onclick="openQuestForm()">${icon("plus")}퀘스트</button></section>
+    ${renderRewardPanel(weekStats, reward)}
     <section class="panel"><div class="panel-head"><h2>방학 퀘스트</h2><span>버킷리스트와 필수 과제</span></div><div class="quest-list">${quests.map(renderQuest).join("")}</div></section>
   `;
 }
 
 function renderQuest(quest) {
   const rate = Math.min(100, Math.round((Number(quest.progress || 0) / Number(quest.target || 1)) * 100));
+  const points = questPointsByCreator(quest.createdBy);
   return `
     <article class="quest ${quest.done ? "done" : ""}">
-      <div><span class="badge ${quest.type}">${quest.type === "must" ? "완료 과제" : "버킷리스트"}</span><strong>${escapeHtml(quest.title)}</strong><p>${quest.studentId === "all" ? "공통" : studentName(quest.studentId)} · ${quest.points}P${quest.note ? ` · ${escapeHtml(quest.note)}` : ""}</p><div class="bar"><span style="width:${rate}%"></span></div></div>
+      <div><span class="badge ${quest.type}">${quest.type === "must" ? "완료 과제" : "버킷리스트"}</span><span class="badge source">${creatorLabel(quest.createdBy)} ${points}P</span><strong>${escapeHtml(quest.title)}</strong><p>${quest.studentId === "all" ? "공통" : studentName(quest.studentId)}${quest.note ? ` · ${escapeHtml(quest.note)}` : ""}</p><div class="bar"><span style="width:${rate}%"></span></div></div>
       <div class="quest-actions"><button type="button" class="round" onclick="addQuestProgress('${quest.id}')" title="진행 +1">${icon("check")}</button><button type="button" class="round subtle" onclick="openQuestForm('${quest.id}')" title="수정">${icon("edit")}</button></div>
     </article>
   `;
@@ -589,6 +712,7 @@ function renderScheduleSheet() {
           <div class="form-row"><label>시작<input name="start" type="time" step="300" min="${minutesToTime(DAY_START)}" max="${minutesToTime(DAY_END - STEP)}" value="${item.start}" onchange="syncScheduleEndTime(this)" /></label><label>종료<input name="end" type="time" step="300" min="${item.start}" max="${minutesToTime(DAY_END)}" value="${item.end}" /></label></div>
           <label>일정명<input name="title" value="${escapeAttr(item.title)}" placeholder="예: 수학 문제풀이" /></label>
           <label>분류<select name="category">${["study", "habit", "play", "chore", "rest"].map((value) => `<option value="${value}" ${value === item.category ? "selected" : ""}>${categoryLabel(value)}</option>`).join("")}</select></label>
+          ${isAdmin() ? `<label>출처<select name="createdBy"><option value="parent" ${item.createdBy !== "student" ? "selected" : ""}>부모 공유 일정 (+${PARENT_SCHEDULE_POINTS}P)</option><option value="student" ${item.createdBy === "student" ? "selected" : ""}>아이 직접 등록</option></select></label>` : `<input type="hidden" name="createdBy" value="student" />`}
           <label>메모<textarea name="memo" placeholder="준비물, 장소, 보상 등을 적어주세요.">${escapeHtml(item.memo || "")}</textarea></label>
           <label class="check"><input name="done" type="checkbox" ${item.done ? "checked" : ""} /> 완료</label>
           <div class="form-actions">${existing ? `<button type="button" class="danger" onclick="deleteSchedule('${item.id}')">${icon("trash")}삭제</button>` : ""}<button type="submit" class="primary">저장</button></div>
@@ -609,8 +733,8 @@ function renderQuestSheet() {
           ${isAdmin() ? `<label>대상<select name="studentId"><option value="all" ${quest.studentId === "all" ? "selected" : ""}>공통</option>${state.data.students.map((student) => `<option value="${student.id}" ${student.id === quest.studentId ? "selected" : ""}>${student.name}</option>`).join("")}</select></label>` : ""}
           <label>퀘스트명<input name="title" value="${escapeAttr(quest.title)}" placeholder="예: 자전거 타고 한강 가기" /></label>
           <label>유형<select name="type"><option value="bucket" ${quest.type === "bucket" ? "selected" : ""}>버킷리스트</option><option value="must" ${quest.type === "must" ? "selected" : ""}>완료 과제</option></select></label>
+          ${isAdmin() ? `<label>출처<select name="createdBy"><option value="parent" ${quest.createdBy !== "student" ? "selected" : ""}>부모 퀘스트 (${PARENT_QUEST_POINTS}P)</option><option value="student" ${quest.createdBy === "student" ? "selected" : ""}>아이 직접 퀘스트 (${SELF_QUEST_POINTS}P)</option></select></label>` : `<input type="hidden" name="createdBy" value="student" /><div class="point-hint">직접 만든 퀘스트 완료 시 ${SELF_QUEST_POINTS}P</div>`}
           <div class="form-row"><label>진행<input name="progress" type="number" min="0" step="1" value="${quest.progress || 0}" /></label><label>목표<input name="target" type="number" min="1" step="1" value="${quest.target || 1}" /></label></div>
-          <label>포인트<input name="points" type="number" min="0" step="10" value="${quest.points || 30}" /></label>
           <label>메모<textarea name="note" placeholder="완료 조건이나 약속을 적어주세요.">${escapeHtml(quest.note || "")}</textarea></label>
           <label class="check"><input name="done" type="checkbox" ${quest.done ? "checked" : ""} /> 완료</label>
           <div class="form-actions">${existing ? `<button type="button" class="danger" onclick="deleteQuest('${quest.id}')">${icon("trash")}삭제</button>` : ""}<button type="submit" class="primary">저장</button></div>
