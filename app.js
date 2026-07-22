@@ -12,6 +12,7 @@ const STUDY_BASE_POINTS = 10;
 const STUDY_BONUS_STEP_MINUTES = 30;
 const STUDY_BONUS_POINTS = 5;
 const PARENT_SCHEDULE_POINTS = 10;
+const MISSED_SCHEDULE_PENALTY = -10;
 const SELF_QUEST_POINTS = 50;
 const PARENT_QUEST_POINTS = 100;
 const WEEKLY_REWARD_TARGET = 500;
@@ -56,7 +57,7 @@ function defaultData() {
 }
 
 function seedSchedule(studentId, date, start, end, title, category, createdBy = "parent") {
-  return { id: cryptoId(), studentId, date, start, end, title, category, memo: "", done: false, createdBy, completedAt: "", updatedAt: new Date().toISOString() };
+  return { id: cryptoId(), studentId, date, start, end, title, category, memo: "", done: false, createdBy, approvalStatus: createdBy === "student" ? "pending" : "approved", completedAt: "", updatedAt: new Date().toISOString() };
 }
 
 function seedQuest(studentId, title, type, points, progress, target, createdBy = "parent") {
@@ -107,9 +108,12 @@ function normalizeData(data) {
 }
 
 function normalizeSchedule(item) {
+  const createdBy = item.createdBy || "parent";
   return {
     ...item,
-    createdBy: item.createdBy || "parent",
+    createdBy,
+    approvalStatus: item.approvalStatus || (createdBy === "student" && !item.done ? "pending" : "approved"),
+    penalty: Number(item.penalty || 0),
     completedAt: item.done ? item.completedAt || item.updatedAt || "" : "",
   };
 }
@@ -284,7 +288,10 @@ function studyPointsFor(minutes) {
 
 function pointStatsFor(studentId, dates = null) {
   const dateSet = dates ? new Set(dates) : null;
-  const schedules = state.data.schedules.filter((item) => item.studentId === studentId && item.done && (!dateSet || dateSet.has(item.date)));
+  const schedules = state.data.schedules.filter((item) => item.studentId === studentId && item.done && item.approvalStatus === "approved" && (!dateSet || dateSet.has(item.date)));
+  const penalties = state.data.schedules
+    .filter((item) => item.studentId === studentId && item.approvalStatus === "missed" && (!dateSet || dateSet.has(item.date)))
+    .reduce((sum, item) => sum + Number(item.penalty || MISSED_SCHEDULE_PENALTY), 0);
   const studyMinutes = schedules.filter((item) => item.category === "study").reduce((sum, item) => sum + duration(item), 0);
   const studyPoints = studyPointsFor(studyMinutes);
   const schedulePoints = schedules.filter((item) => item.createdBy === "parent").length * PARENT_SCHEDULE_POINTS;
@@ -297,7 +304,8 @@ function pointStatsFor(studentId, dates = null) {
     studyPoints,
     schedulePoints,
     questPoints,
-    total: studyPoints + schedulePoints + questPoints,
+    penalties,
+    total: studyPoints + schedulePoints + questPoints + penalties,
   };
 }
 
@@ -319,8 +327,29 @@ function creatorLabel(createdBy) {
   return createdBy === "student" ? "직접 등록" : "부모 공유";
 }
 
+function approvalLabel(status) {
+  return {
+    pending: "승인 대기",
+    approved: "승인",
+    rejected: "반려",
+    missed: "미수행 -10P",
+    excused: "면제",
+    change_requested: "변경 요청",
+  }[status] || "승인 대기";
+}
+
+function approvalClass(status) {
+  return {
+    approved: "approved",
+    rejected: "rejected",
+    missed: "missed",
+    excused: "excused",
+    change_requested: "pending",
+  }[status] || "pending";
+}
+
 function levelFor(points) {
-  return Math.floor(points / 100) + 1;
+  return Math.max(1, Math.floor(Math.max(0, points) / 100) + 1);
 }
 
 function completionRate(items) {
@@ -367,11 +396,17 @@ function saveSchedule(event) {
     memo: form.get("memo").trim(),
     done,
     createdBy: isAdmin() ? form.get("createdBy") || "parent" : "student",
+    approvalStatus: isAdmin() ? form.get("approvalStatus") || "approved" : existing?.approvalStatus === "approved" ? "change_requested" : existing?.approvalStatus || "pending",
+    penalty: (isAdmin() ? form.get("approvalStatus") : existing?.approvalStatus) === "missed" ? MISSED_SCHEDULE_PENALTY : 0,
     completedAt: done ? existing?.completedAt || new Date().toISOString() : "",
     updatedAt: new Date().toISOString(),
   };
   if (!item.title) return;
   if (timeToMinutes(item.end) <= timeToMinutes(item.start)) item.end = minutesToTime(Math.min(DAY_END, timeToMinutes(item.start) + STEP));
+  if (["missed", "rejected", "excused"].includes(item.approvalStatus)) {
+    item.done = false;
+    item.completedAt = "";
+  }
   state.data.schedules = state.data.schedules.filter((schedule) => schedule.id !== item.id).concat(item);
   state.editingSchedule = null;
   scheduleSave();
@@ -382,7 +417,25 @@ function toggleSchedule(id) {
   state.data.schedules = state.data.schedules.map((item) => {
     if (item.id !== id) return item;
     const done = !item.done;
-    return { ...item, done, completedAt: done ? new Date().toISOString() : "", updatedAt: new Date().toISOString() };
+    const approvalStatus = done && item.approvalStatus === "pending" && isAdmin() ? "approved" : item.approvalStatus;
+    return { ...item, done, approvalStatus, completedAt: done ? new Date().toISOString() : "", updatedAt: new Date().toISOString() };
+  });
+  scheduleSave();
+  render();
+}
+
+function setScheduleApproval(id, approvalStatus) {
+  state.data.schedules = state.data.schedules.map((item) => {
+    if (item.id !== id) return item;
+    const missed = approvalStatus === "missed";
+    return {
+      ...item,
+      approvalStatus,
+      done: missed ? false : item.done,
+      penalty: missed ? MISSED_SCHEDULE_PENALTY : 0,
+      completedAt: missed ? "" : item.completedAt,
+      updatedAt: new Date().toISOString(),
+    };
   });
   scheduleSave();
   render();
@@ -586,7 +639,7 @@ function renderDay(items) {
     <section class="summary">
       <article><span>오늘 달성률</span><strong>${rate}%</strong><small>${items.filter((item) => item.done).length}/${items.length}개 완료</small></article>
       <article><span>예정 시간</span><strong>${formatDuration(items.reduce((sum, item) => sum + duration(item), 0))}</strong><small>5분 단위 조정</small></article>
-      <article><span>오늘 포인트</span><strong>${todayStats.total}P</strong><small>순공부 ${formatDuration(todayStats.studyMinutes)}</small></article>
+      <article><span>오늘 포인트</span><strong>${todayStats.total}P</strong><small>감점 ${todayStats.penalties}P</small></article>
       <article><span>이번 주 보상</span><strong>${money(reward.amount)}</strong><small>${weekStats.total}/${WEEKLY_REWARD_TARGET}P</small></article>
     </section>
     ${renderRewardPanel(weekStats, reward)}
@@ -622,19 +675,28 @@ function renderTimelineBlock(item) {
 
 function renderScheduleItem(item) {
   return `
-    <article class="schedule-item ${item.done ? "done" : ""}">
+    <article class="schedule-item ${item.done ? "done" : ""} ${approvalClass(item.approvalStatus)}">
       <time>${item.start}<span>${item.end}</span></time>
-      <div><strong>${escapeHtml(item.title)}</strong><p>${categoryLabel(item.category)} · ${formatDuration(duration(item))} · ${creatorLabel(item.createdBy)}${item.createdBy === "parent" ? ` +${PARENT_SCHEDULE_POINTS}P` : ""}${item.memo ? ` · ${escapeHtml(item.memo)}` : ""}</p></div>
+      <div><span class="badge approval ${approvalClass(item.approvalStatus)}">${approvalLabel(item.approvalStatus)}</span><strong>${escapeHtml(item.title)}</strong><p>${categoryLabel(item.category)} · ${formatDuration(duration(item))} · ${creatorLabel(item.createdBy)}${item.createdBy === "parent" && item.approvalStatus === "approved" ? ` +${PARENT_SCHEDULE_POINTS}P` : ""}${item.memo ? ` · ${escapeHtml(item.memo)}` : ""}</p></div>
       <div class="row-actions">
-        <button type="button" class="round" onclick="toggleSchedule('${item.id}')" title="완료">${icon("check")}</button>
-        <button type="button" class="round subtle" onclick="openScheduleForm('${item.id}')" title="수정">${icon("edit")}</button>
+        ${renderScheduleActions(item)}
       </div>
     </article>
   `;
 }
 
+function renderScheduleActions(item) {
+  if (isAdmin()) {
+    const approvalButtons = item.approvalStatus === "pending" || item.approvalStatus === "change_requested"
+      ? `<button type="button" class="mini success" onclick="setScheduleApproval('${item.id}', 'approved')">승인</button><button type="button" class="mini subtle" onclick="setScheduleApproval('${item.id}', 'rejected')">반려</button>`
+      : "";
+    return `${approvalButtons}<button type="button" class="mini danger" onclick="setScheduleApproval('${item.id}', 'missed')">미수행</button><button type="button" class="mini subtle" onclick="setScheduleApproval('${item.id}', 'excused')">면제</button><button type="button" class="round" onclick="toggleSchedule('${item.id}')" title="완료">${icon("check")}</button><button type="button" class="round subtle" onclick="openScheduleForm('${item.id}')" title="수정">${icon("edit")}</button>`;
+  }
+  return `<button type="button" class="round" onclick="toggleSchedule('${item.id}')" title="완료">${icon("check")}</button><button type="button" class="round subtle" onclick="openScheduleForm('${item.id}')" title="${item.approvalStatus === "approved" ? "변경 요청" : "수정"}">${icon("edit")}</button>`;
+}
+
 function renderRewardPanel(stats, reward) {
-  const rate = Math.min(100, Math.round((stats.total / WEEKLY_REWARD_TARGET) * 100));
+  const rate = Math.max(0, Math.min(100, Math.round((stats.total / WEEKLY_REWARD_TARGET) * 100)));
   const rewardText = reward.amount
     ? `일요일 저녁 ${money(reward.amount)} · 다음 +5,000원까지 ${reward.next}P`
     : `${reward.next}P 더 달성하면 ${money(WEEKLY_REWARD_BASE)} 보상`;
@@ -646,6 +708,7 @@ function renderRewardPanel(stats, reward) {
         <span>순공부 ${stats.studyPoints}P</span>
         <span>부모 일정 ${stats.schedulePoints}P</span>
         <span>퀘스트 ${stats.questPoints}P</span>
+        <span>감점 ${stats.penalties}P</span>
       </div>
     </section>
   `;
@@ -713,6 +776,7 @@ function renderScheduleSheet() {
           <label>일정명<input name="title" value="${escapeAttr(item.title)}" placeholder="예: 수학 문제풀이" /></label>
           <label>분류<select name="category">${["study", "habit", "play", "chore", "rest"].map((value) => `<option value="${value}" ${value === item.category ? "selected" : ""}>${categoryLabel(value)}</option>`).join("")}</select></label>
           ${isAdmin() ? `<label>출처<select name="createdBy"><option value="parent" ${item.createdBy !== "student" ? "selected" : ""}>부모 공유 일정 (+${PARENT_SCHEDULE_POINTS}P)</option><option value="student" ${item.createdBy === "student" ? "selected" : ""}>아이 직접 등록</option></select></label>` : `<input type="hidden" name="createdBy" value="student" />`}
+          ${isAdmin() ? `<label>승인 상태<select name="approvalStatus">${["pending", "approved", "rejected", "missed", "excused", "change_requested"].map((value) => `<option value="${value}" ${value === item.approvalStatus ? "selected" : ""}>${approvalLabel(value)}</option>`).join("")}</select></label>` : `<div class="point-hint">${approvalLabel(item.approvalStatus)}${item.approvalStatus === "approved" ? " 상태에서 수정하면 부모에게 변경 요청으로 표시됩니다." : ""}</div>`}
           <label>메모<textarea name="memo" placeholder="준비물, 장소, 보상 등을 적어주세요.">${escapeHtml(item.memo || "")}</textarea></label>
           <label class="check"><input name="done" type="checkbox" ${item.done ? "checked" : ""} /> 완료</label>
           <div class="form-actions">${existing ? `<button type="button" class="danger" onclick="deleteSchedule('${item.id}')">${icon("trash")}삭제</button>` : ""}<button type="submit" class="primary">저장</button></div>
@@ -761,6 +825,7 @@ Object.assign(window, {
   openScheduleForm,
   saveSchedule,
   toggleSchedule,
+  setScheduleApproval,
   deleteSchedule,
   openQuestForm,
   saveQuest,

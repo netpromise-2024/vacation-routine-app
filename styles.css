@@ -489,6 +489,31 @@ textarea {
   background: var(--grey-100);
 }
 
+.mini {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mini.success {
+  color: #007a55;
+  background: rgba(0, 228, 155, 0.13);
+}
+
+.mini.subtle {
+  color: var(--grey-600);
+  background: var(--grey-100);
+}
+
+.mini.danger {
+  color: var(--danger);
+  background: rgba(240, 67, 106, 0.1);
+}
+
 .summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -759,7 +784,7 @@ textarea {
 
 .schedule-item {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) 86px;
+  grid-template-columns: 62px minmax(0, 1fr) 96px;
   gap: 12px;
   align-items: center;
   min-height: 88px;
@@ -774,6 +799,16 @@ textarea {
 
 .schedule-item.done {
   opacity: 0.68;
+}
+
+.schedule-item.pending {
+  border-left: 3px solid var(--bv-blue);
+  padding-left: 10px;
+}
+
+.schedule-item.missed {
+  border-left: 3px solid var(--danger);
+  padding-left: 10px;
 }
 
 .schedule-item time {
@@ -815,6 +850,7 @@ textarea {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .empty {
@@ -954,6 +990,31 @@ textarea {
   margin-left: 5px;
   color: var(--bv-blue);
   background: rgba(68, 52, 226, 0.1);
+}
+
+.badge.approval {
+  margin-right: 5px;
+}
+
+.badge.approval.approved {
+  color: #007a55;
+  background: rgba(0, 228, 155, 0.13);
+}
+
+.badge.approval.pending {
+  color: var(--bv-blue);
+  background: rgba(68, 52, 226, 0.1);
+}
+
+.badge.approval.rejected,
+.badge.approval.missed {
+  color: var(--danger);
+  background: rgba(240, 67, 106, 0.1);
+}
+
+.badge.approval.excused {
+  color: var(--grey-600);
+  background: var(--grey-100);
 }
 
 .bar {
@@ -1249,7 +1310,7 @@ button:active {
   }
 
   .schedule-item {
-    grid-template-columns: 56px minmax(0, 1fr) 82px;
+    grid-template-columns: 56px minmax(0, 1fr) 92px;
     gap: 10px;
   }
 
