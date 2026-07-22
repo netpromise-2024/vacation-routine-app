@@ -218,7 +218,10 @@ http
         res.end("not found");
         return;
       }
-      res.writeHead(200, { "Content-Type": contentTypes[path.extname(file)] || "application/octet-stream" });
+      res.writeHead(200, {
+        "Content-Type": contentTypes[path.extname(file)] || "application/octet-stream",
+        "Cache-Control": "no-store",
+      });
       res.end(data);
     });
   })

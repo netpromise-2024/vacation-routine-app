@@ -697,7 +697,7 @@ function renderDay(items) {
       <article><span>오늘 달성률</span><strong>${rate}%</strong><small>${items.filter((item) => item.done).length}/${items.length}개 완료</small></article>
       <article><span>예정 시간</span><strong>${formatDuration(items.reduce((sum, item) => sum + duration(item), 0))}</strong><small>5분 단위 조정</small></article>
       <article><span>오늘 순공부</span><strong>${formatDuration(todayStats.studyMinutes)}</strong><small>${dailyStudyText(todayStats.studyMinutes)}</small></article>
-      <article><span>이번 주 보상</span><strong>${money(reward.amount)}</strong><small>${weekStats.total}/${WEEKLY_REWARD_TARGET}P</small></article>
+      <article><span>오늘 포인트</span><strong>${todayStats.total}P</strong><small>3시간 달성 후 적립</small></article>
     </section>
     ${renderRewardPanel(weekStats, reward)}
     <section class="panel">
