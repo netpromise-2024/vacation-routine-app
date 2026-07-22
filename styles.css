@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap");
+
 :root {
   color-scheme: light;
   --bv-blue: #4434e2;
@@ -48,7 +50,7 @@ body {
     linear-gradient(180deg, #ffffff 0, var(--bg) 280px),
     var(--bg);
   font-family:
-    Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", "Noto Sans KR", sans-serif;
+    "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
   letter-spacing: 0;
 }
 
