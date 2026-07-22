@@ -17,12 +17,14 @@ const contentTypes = {
   ".yaml": "text/yaml; charset=utf-8",
 };
 
+const canonicalStudents = [
+  { id: "hyeon1", name: "옥승현", color: "#3182f6" },
+  { id: "hyeon2", name: "옥수현", color: "#03b26c" },
+  { id: "hyeon3", name: "옥서현", color: "#8b5cf6" },
+];
+
 const initialData = {
-  students: [
-    { id: "hyeon1", name: "옥승현", color: "#3182f6" },
-    { id: "hyeon2", name: "옥수현", color: "#03b26c" },
-    { id: "hyeon3", name: "셋째 아들", color: "#8b5cf6" },
-  ],
+  students: canonicalStudents,
   schedules: [],
   quests: [
     {
@@ -46,11 +48,25 @@ const initialData = {
       progress: 0,
       target: 1,
       done: false,
-      note: "방학 때 해보고 싶은 것",
+      note: "방학 중 해보고 싶은 것",
       updatedAt: new Date().toISOString(),
     },
   ],
 };
+
+function normalizeData(data) {
+  const incomingStudents = Array.isArray(data?.students) ? data.students : [];
+  return {
+    students: canonicalStudents.map((student) => ({
+      ...student,
+      ...(incomingStudents.find((item) => item.id === student.id) || {}),
+      name: student.name,
+      color: student.color,
+    })),
+    schedules: Array.isArray(data?.schedules) ? data.schedules : [],
+    quests: Array.isArray(data?.quests) ? data.quests : initialData.quests,
+  };
+}
 
 function ensureData() {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -60,12 +76,7 @@ function ensureData() {
 function readData() {
   ensureData();
   try {
-    const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
-    return {
-      students: Array.isArray(data.students) ? data.students : initialData.students,
-      schedules: Array.isArray(data.schedules) ? data.schedules : [],
-      quests: Array.isArray(data.quests) ? data.quests : [],
-    };
+    return normalizeData(JSON.parse(fs.readFileSync(dataPath, "utf8")));
   } catch {
     return initialData;
   }
@@ -73,7 +84,7 @@ function readData() {
 
 function writeData(data) {
   ensureData();
-  fs.writeFileSync(dataPath, JSON.stringify({ ...data, updatedAt: new Date().toISOString() }, null, 2));
+  fs.writeFileSync(dataPath, JSON.stringify({ ...normalizeData(data), updatedAt: new Date().toISOString() }, null, 2));
 }
 
 function sendJson(res, status, payload) {
@@ -108,12 +119,7 @@ async function handleApi(req, res) {
 
     if (req.method === "PUT") {
       const body = await readBody(req);
-      const payload = JSON.parse(body || "{}");
-      writeData({
-        students: Array.isArray(payload.students) ? payload.students : initialData.students,
-        schedules: Array.isArray(payload.schedules) ? payload.schedules : [],
-        quests: Array.isArray(payload.quests) ? payload.quests : [],
-      });
+      writeData(JSON.parse(body || "{}"));
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -132,7 +138,7 @@ http
       return;
     }
 
-    let filePath = pathname === "/" ? "/index.html" : pathname;
+    const filePath = pathname === "/" ? "/index.html" : pathname;
     const file = path.normalize(path.join(root, filePath));
 
     if (!file.startsWith(root)) {

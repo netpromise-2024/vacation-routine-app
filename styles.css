@@ -66,12 +66,84 @@ button {
   background: var(--bg);
 }
 
+.login-screen {
+  width: min(520px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 34px 20px;
+  background:
+    linear-gradient(180deg, rgba(49, 130, 246, 0.08), rgba(242, 244, 246, 0) 34%),
+    var(--bg);
+}
+
+.login-hero {
+  padding: 22px 4px 18px;
+}
+
+.login-hero h1 {
+  font-size: 34px;
+  line-height: 44px;
+}
+
+.login-hero p:last-child {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 25px;
+  word-break: keep-all;
+}
+
+.login-options {
+  display: grid;
+  gap: 10px;
+}
+
+.login-options button {
+  display: grid;
+  gap: 4px;
+  min-height: 82px;
+  padding: 18px;
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  box-shadow: 0 1px 0 rgba(25, 31, 40, 0.04);
+}
+
+.login-options button.admin-login {
+  background: var(--blue);
+  color: #ffffff;
+}
+
+.login-options strong {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 900;
+}
+
+.login-options span {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 800;
+}
+
+.login-options .admin-login span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
 .top {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   padding: 28px 20px 16px;
   background: var(--surface);
+}
+
+.top-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .eyebrow {
@@ -145,6 +217,16 @@ h2 {
   font-weight: 800;
 }
 
+.logout {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: var(--muted);
+  background: var(--line-2);
+}
+
 .students {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -183,6 +265,29 @@ h2 {
   line-height: 17px;
   font-weight: 800;
   opacity: 0.8;
+}
+
+.personal-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.personal-badge strong {
+  color: var(--blue);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 900;
+}
+
+.personal-badge span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 19px;
+  font-weight: 800;
 }
 
 .tabs {
@@ -346,6 +451,14 @@ textarea {
   margin-bottom: 12px;
 }
 
+.panel-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 20px;
+  word-break: keep-all;
+}
+
 .panel-head span {
   font-size: 13px;
   line-height: 19px;
@@ -355,6 +468,97 @@ textarea {
 .schedule-list,
 .quest-list {
   display: grid;
+}
+
+.timeline-wrap {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  max-height: 580px;
+  overflow: auto;
+  margin: 14px -2px 18px;
+  padding: 4px 2px 8px;
+  border-radius: 18px;
+}
+
+.timeline-hours {
+  position: relative;
+}
+
+.time-mark {
+  position: absolute;
+  right: 0;
+  transform: translateY(-8px);
+  color: var(--muted-2);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 800;
+}
+
+.timeline-board {
+  position: relative;
+  border-radius: 16px;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0, transparent 29px, rgba(229, 232, 235, 0.88) 30px),
+    linear-gradient(90deg, rgba(49, 130, 246, 0.07), rgba(255, 255, 255, 0));
+  border: 1px solid var(--line);
+  touch-action: none;
+}
+
+.event-block,
+.drag-draft {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  border-radius: 12px;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.event-block {
+  overflow: hidden;
+  color: #ffffff;
+  background: var(--blue);
+  box-shadow: 0 6px 18px rgba(49, 130, 246, 0.22);
+}
+
+.event-block.done {
+  background: var(--green);
+  box-shadow: 0 6px 18px rgba(3, 178, 108, 0.2);
+}
+
+.event-block strong,
+.event-block span {
+  display: block;
+  color: inherit;
+}
+
+.event-block strong {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-block span {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 800;
+  opacity: 0.8;
+}
+
+.drag-draft {
+  z-index: 2;
+  display: grid;
+  align-items: center;
+  color: var(--blue);
+  background: rgba(49, 130, 246, 0.14);
+  border: 2px dashed rgba(49, 130, 246, 0.55);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 900;
 }
 
 .schedule-item {

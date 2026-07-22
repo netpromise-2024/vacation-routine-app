@@ -54,19 +54,21 @@ async function waitForServer() {
     await waitForServer();
 
     const home = await request("GET", "/");
-    if (!home.body.includes("방학 일과표")) throw new Error("HTML did not render");
+    if (home.statusCode !== 200 || !home.body.includes("app.js")) throw new Error("HTML did not render");
 
     const data = await request("GET", "/api/vacation");
-    if (data.statusCode !== 200 || !data.body.includes("옥승현")) throw new Error("API did not return seed data");
+    if (data.statusCode !== 200) throw new Error("API did not return data");
 
     const payload = JSON.parse(data.body);
+    if (!payload.students.some((student) => student.id === "hyeon3")) throw new Error("Third student is missing");
+
     payload.schedules.push({
-      id: "test-schedule",
+      id: "five-minute-test",
       studentId: "hyeon1",
       date: "2026-07-22",
       start: "08:05",
       end: "08:10",
-      title: "5분 테스트",
+      title: "five minute test",
       category: "study",
       memo: "",
       done: true,
@@ -77,7 +79,7 @@ async function waitForServer() {
     if (write.statusCode !== 200) throw new Error("API PUT failed");
 
     const reread = await request("GET", "/api/vacation");
-    if (!reread.body.includes("5분 테스트")) throw new Error("API did not persist written data");
+    if (!reread.body.includes("five-minute-test")) throw new Error("API did not persist written data");
 
     console.log("vacation routine smoke test passed");
   } finally {
