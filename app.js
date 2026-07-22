@@ -280,7 +280,7 @@ function visibleQuests() {
 }
 
 function pointsFor(studentId) {
-  return pointStatsFor(studentId).total;
+  return pointStatsFor(studentId, earnedWeekDates(state.selectedDate)).total;
 }
 
 function questPointsByCreator(createdBy) {

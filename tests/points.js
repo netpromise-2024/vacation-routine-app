@@ -27,7 +27,7 @@ const context = {
 
 vm.runInNewContext(
   `${appCode}
-window.__pointsTest = { state, pointStatsFor, normalizeData, weekDates, earnedWeekDates };`,
+window.__pointsTest = { state, pointsFor, pointStatsFor, normalizeData, weekDates, earnedWeekDates };`,
   context,
 );
 
@@ -78,6 +78,11 @@ context.window.__pointsTest.state.data.schedules.push(
 const earnedWeek = context.window.__pointsTest.pointStatsFor("hyeon1", context.window.__pointsTest.earnedWeekDates(date));
 if (earnedWeek.sources.some((source) => source.date === "2026-07-23")) {
   throw new Error(`Future points should not be included in earned week stats: ${JSON.stringify(earnedWeek.sources)}`);
+}
+
+const headerPoints = context.window.__pointsTest.pointsFor("hyeon1");
+if (headerPoints !== earnedWeek.total) {
+  throw new Error(`Header points should match earned week points, received ${headerPoints}P vs ${earnedWeek.total}P`);
 }
 
 console.log("vacation routine point rules passed");
