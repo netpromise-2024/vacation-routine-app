@@ -4,6 +4,7 @@ const SESSION_KEY = "vacation-routine-session-v1";
 const TODAY = "2026-07-22";
 const DAY_START = 7 * 60;
 const DAY_END = 23 * 60 + 30;
+const AXIS_END = 24 * 60;
 const STEP = 5;
 const PX_PER_MINUTE = 1.25;
 const app = document.querySelector("#app");
@@ -208,6 +209,11 @@ function timeToMinutes(time) {
 function minutesToTime(minutes) {
   const safe = Math.max(0, Math.min(23 * 60 + 55, Math.round(minutes / STEP) * STEP));
   return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function minutesToAxisLabel(minutes) {
+  if (minutes === 24 * 60) return "24:00";
+  return minutesToTime(minutes);
 }
 
 function duration(item) {
@@ -496,16 +502,13 @@ function renderDay(items) {
 
 function renderTimeline(items) {
   const marks = [];
-  for (let minutes = DAY_START; minutes <= DAY_END; minutes += 60) {
-    marks.push(`<div class="time-mark" style="top:${(minutes - DAY_START) * PX_PER_MINUTE}px">${minutesToTime(minutes)}</div>`);
-  }
-  if (marks[marks.length - 1] && !marks[marks.length - 1].includes(minutesToTime(DAY_END))) {
-    marks.push(`<div class="time-mark" style="top:${(DAY_END - DAY_START) * PX_PER_MINUTE}px">${minutesToTime(DAY_END)}</div>`);
+  for (let minutes = DAY_START; minutes <= AXIS_END; minutes += 60) {
+    marks.push(`<div class="time-mark" style="top:${(minutes - DAY_START) * PX_PER_MINUTE}px">${minutesToAxisLabel(minutes)}</div>`);
   }
   return `
     <div class="timeline-wrap">
       <div class="timeline-hours">${marks.join("")}</div>
-      <div class="timeline-board" style="height:${(DAY_END - DAY_START) * PX_PER_MINUTE}px" onpointerdown="timelinePointerDown(event)" onpointermove="timelinePointerMove(event)" onpointerup="timelinePointerUp(event)">
+      <div class="timeline-board" style="height:${(AXIS_END - DAY_START) * PX_PER_MINUTE}px" onpointerdown="timelinePointerDown(event)" onpointermove="timelinePointerMove(event)" onpointerup="timelinePointerUp(event)">
         ${items.map(renderTimelineBlock).join("")}
         <div class="drag-draft" hidden></div>
       </div>
