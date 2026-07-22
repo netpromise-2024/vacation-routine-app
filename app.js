@@ -224,9 +224,10 @@ function formatDate(date) {
 
 function weekDates(dateValue) {
   const date = parseDate(dateValue);
-  const sunday = new Date(date);
-  sunday.setDate(date.getDate() - date.getDay());
-  return Array.from({ length: 7 }, (_, index) => formatDate(new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + index)));
+  const monday = new Date(date);
+  const daysFromMonday = (date.getDay() + 6) % 7;
+  monday.setDate(date.getDate() - daysFromMonday);
+  return Array.from({ length: 7 }, (_, index) => formatDate(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index)));
 }
 
 function earnedWeekDates(dateValue) {

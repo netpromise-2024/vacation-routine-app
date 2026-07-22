@@ -27,11 +27,16 @@ const context = {
 
 vm.runInNewContext(
   `${appCode}
-window.__pointsTest = { state, pointStatsFor, normalizeData, earnedWeekDates };`,
+window.__pointsTest = { state, pointStatsFor, normalizeData, weekDates, earnedWeekDates };`,
   context,
 );
 
 const date = "2026-07-22";
+const week = context.window.__pointsTest.weekDates(date);
+if (week[0] !== "2026-07-20" || week[6] !== "2026-07-26") {
+  throw new Error(`Expected Monday-Sunday week, received ${week.join(",")}`);
+}
+
 context.window.__pointsTest.state.data = context.window.__pointsTest.normalizeData({
   students: [{ id: "hyeon1", name: "옥승현", color: "#3182f6" }],
   schedules: [
