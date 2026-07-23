@@ -12,7 +12,7 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabaseTable = process.env.SUPABASE_TABLE || "vacation_app_state";
 const appStateId = process.env.APP_STATE_ID || "family-vacation-routine";
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || "";
-const telegramChatId = process.env.TELEGRAM_CHAT_ID || "";
+const telegramChatIds = parseTelegramChatIds(process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_ID || "");
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -66,12 +66,19 @@ function trimTrailingSlash(value) {
   return value.replace(/\/+$/, "");
 }
 
+function parseTelegramChatIds(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function hasSupabaseConfig() {
   return Boolean(supabaseUrl && supabaseServiceRoleKey);
 }
 
 function hasTelegramConfig() {
-  return Boolean(telegramBotToken && telegramChatId);
+  return Boolean(telegramBotToken && telegramChatIds.length);
 }
 
 function normalizeData(data) {
@@ -209,12 +216,16 @@ function buildTelegramMessages(before, after) {
 async function sendTelegramMessage(text) {
   if (!hasTelegramConfig()) return;
   const url = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: telegramChatId, text }),
-  });
-  if (!response.ok) throw new Error(`Telegram send failed: ${response.status}`);
+  await Promise.all(
+    telegramChatIds.map(async (chatId) => {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text }),
+      });
+      if (!response.ok) throw new Error(`Telegram send failed: ${response.status}`);
+    }),
+  );
 }
 
 async function notifyTelegramChanges(before, after) {
