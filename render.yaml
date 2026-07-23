@@ -14,3 +14,7 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_IDS
         sync: false
+      - key: TELEGRAM_MOM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_MOM_CHAT_IDS
+        sync: false

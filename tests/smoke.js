@@ -62,7 +62,7 @@ async function waitForServer() {
     const status = await request("GET", "/api/status");
     if (status.statusCode !== 200) throw new Error("Status API did not return data");
     const statusPayload = JSON.parse(status.body);
-    if (statusPayload.telegram.configured !== false || statusPayload.telegram.recipientCount !== 0) {
+    if (statusPayload.telegram.configured !== false || statusPayload.telegram.recipientCount !== 0 || statusPayload.telegram.botCount !== 0) {
       throw new Error("Status API should hide missing Telegram config cleanly");
     }
 

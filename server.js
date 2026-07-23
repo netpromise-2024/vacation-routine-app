@@ -11,8 +11,7 @@ const supabaseUrl = trimTrailingSlash(process.env.SUPABASE_URL || "");
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabaseTable = process.env.SUPABASE_TABLE || "vacation_app_state";
 const appStateId = process.env.APP_STATE_ID || "family-vacation-routine";
-const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || "";
-const telegramChatIds = parseTelegramChatIds(process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_IDs || process.env.TELEGRAM_CHAT_ID || "");
+const telegramTargets = parseTelegramTargets();
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -73,12 +72,23 @@ function parseTelegramChatIds(value) {
     .filter(Boolean);
 }
 
+function parseTelegramTargets() {
+  return [
+    [process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_IDs || process.env.TELEGRAM_CHAT_ID],
+    [process.env.TELEGRAM_MOM_BOT_TOKEN, process.env.TELEGRAM_MOM_CHAT_IDS || process.env.TELEGRAM_MOM_CHAT_ID],
+    [process.env.TELEGRAM_BOT_TOKEN_2, process.env.TELEGRAM_CHAT_IDS_2 || process.env.TELEGRAM_CHAT_ID_2],
+  ].flatMap(([botToken, chatIds]) => {
+    if (!botToken) return [];
+    return parseTelegramChatIds(chatIds).map((chatId) => ({ botToken, chatId }));
+  });
+}
+
 function hasSupabaseConfig() {
   return Boolean(supabaseUrl && supabaseServiceRoleKey);
 }
 
 function hasTelegramConfig() {
-  return Boolean(telegramBotToken && telegramChatIds.length);
+  return telegramTargets.length > 0;
 }
 
 function normalizeData(data) {
@@ -215,9 +225,9 @@ function buildTelegramMessages(before, after) {
 
 async function sendTelegramMessage(text) {
   if (!hasTelegramConfig()) return;
-  const url = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
   await Promise.all(
-    telegramChatIds.map(async (chatId) => {
+    telegramTargets.map(async ({ botToken, chatId }) => {
+      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -382,7 +392,8 @@ function handleStatus(req, res) {
     },
     telegram: {
       configured: hasTelegramConfig(),
-      recipientCount: telegramChatIds.length,
+      recipientCount: telegramTargets.length,
+      botCount: new Set(telegramTargets.map((target) => target.botToken)).size,
     },
   });
 }
