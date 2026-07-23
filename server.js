@@ -12,7 +12,7 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabaseTable = process.env.SUPABASE_TABLE || "vacation_app_state";
 const appStateId = process.env.APP_STATE_ID || "family-vacation-routine";
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || "";
-const telegramChatIds = parseTelegramChatIds(process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_ID || "");
+const telegramChatIds = parseTelegramChatIds(process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_IDs || process.env.TELEGRAM_CHAT_ID || "");
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
