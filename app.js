@@ -83,16 +83,12 @@ function cryptoId() {
 }
 
 function loadSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY));
-  } catch {
-    return null;
-  }
+  localStorage.removeItem(SESSION_KEY);
+  return null;
 }
 
 function saveSession(session) {
   state.session = session;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
 function loadCache() {
