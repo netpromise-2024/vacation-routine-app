@@ -11,6 +11,8 @@ const supabaseUrl = trimTrailingSlash(process.env.SUPABASE_URL || "");
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabaseTable = process.env.SUPABASE_TABLE || "vacation_app_state";
 const appStateId = process.env.APP_STATE_ID || "family-vacation-routine";
+const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || "";
+const telegramChatId = process.env.TELEGRAM_CHAT_ID || "";
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -65,6 +67,10 @@ function trimTrailingSlash(value) {
 
 function hasSupabaseConfig() {
   return Boolean(supabaseUrl && supabaseServiceRoleKey);
+}
+
+function hasTelegramConfig() {
+  return Boolean(telegramBotToken && telegramChatId);
 }
 
 function normalizeData(data) {
@@ -152,6 +158,70 @@ async function writeData(data) {
   return writeSupabaseData(data);
 }
 
+function studentName(studentId, data) {
+  return data.students.find((student) => student.id === studentId)?.name || studentId;
+}
+
+function scheduleNoticeType(previous, item) {
+  if (item.createdBy !== "student") return "";
+  if (!["pending", "change_requested"].includes(item.approvalStatus)) return "";
+  if (!previous) return "새 일정 등록";
+  if (previous.approvalStatus !== item.approvalStatus) return item.approvalStatus === "change_requested" ? "일정 변경 요청" : "일정 수정";
+  if (previous.updatedAt !== item.updatedAt) return item.approvalStatus === "change_requested" ? "일정 변경 요청" : "일정 수정";
+  return "";
+}
+
+function buildTelegramMessages(before, after) {
+  const previousSchedules = new Map(before.schedules.map((item) => [item.id, item]));
+  const previousQuests = new Map(before.quests.map((item) => [item.id, item]));
+  const messages = [];
+
+  after.schedules.forEach((item) => {
+    const noticeType = scheduleNoticeType(previousSchedules.get(item.id), item);
+    if (!noticeType) return;
+    messages.push(
+      [
+        `[방학 일과] ${noticeType}`,
+        `아이: ${studentName(item.studentId, after)}`,
+        `날짜: ${item.date}`,
+        `시간: ${item.start}~${item.end}`,
+        `내용: ${item.title}`,
+      ].join("\n"),
+    );
+  });
+
+  after.quests.forEach((item) => {
+    if (item.createdBy !== "student" || previousQuests.has(item.id)) return;
+    messages.push(
+      [
+        "[방학 일과] 새 퀘스트 등록",
+        `아이: ${item.studentId === "all" ? "공통" : studentName(item.studentId, after)}`,
+        `퀘스트: ${item.title}`,
+        `완료 기준: ${item.target || 1}회`,
+      ].join("\n"),
+    );
+  });
+
+  return messages;
+}
+
+async function sendTelegramMessage(text) {
+  if (!hasTelegramConfig()) return;
+  const url = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: telegramChatId, text }),
+  });
+  if (!response.ok) throw new Error(`Telegram send failed: ${response.status}`);
+}
+
+async function notifyTelegramChanges(before, after) {
+  if (!hasTelegramConfig()) return;
+  const messages = buildTelegramMessages(before, after);
+  await Promise.all(messages.map(sendTelegramMessage));
+}
+
 function sendJson(res, status, payload) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -184,7 +254,9 @@ async function handleApi(req, res) {
 
     if (req.method === "PUT") {
       const body = await readBody(req);
-      await writeData(JSON.parse(body || "{}"));
+      const before = await readData();
+      const after = await writeData(JSON.parse(body || "{}"));
+      notifyTelegramChanges(before, after).catch((error) => console.error(error.message || error));
       sendJson(res, 200, { ok: true });
       return;
     }
