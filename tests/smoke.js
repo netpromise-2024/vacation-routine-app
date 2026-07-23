@@ -59,6 +59,13 @@ async function waitForServer() {
     const data = await request("GET", "/api/vacation");
     if (data.statusCode !== 200) throw new Error("API did not return data");
 
+    const status = await request("GET", "/api/status");
+    if (status.statusCode !== 200) throw new Error("Status API did not return data");
+    const statusPayload = JSON.parse(status.body);
+    if (statusPayload.telegram.configured !== false || statusPayload.telegram.recipientCount !== 0) {
+      throw new Error("Status API should hide missing Telegram config cleanly");
+    }
+
     const payload = JSON.parse(data.body);
     if (!payload.students.some((student) => student.id === "hyeon3")) throw new Error("Third student is missing");
 

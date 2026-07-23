@@ -171,9 +171,9 @@ function studentName(studentId, data) {
 }
 
 function scheduleNoticeType(previous, item) {
+  if (!previous) return item.createdBy === "student" ? "아이 일정 등록" : "부모 일정 공유";
   if (item.createdBy !== "student") return "";
   if (!["pending", "change_requested"].includes(item.approvalStatus)) return "";
-  if (!previous) return "새 일정 등록";
   if (previous.approvalStatus !== item.approvalStatus) return item.approvalStatus === "change_requested" ? "일정 변경 요청" : "일정 수정";
   if (previous.updatedAt !== item.updatedAt) return item.approvalStatus === "change_requested" ? "일정 변경 요청" : "일정 수정";
   return "";
@@ -231,6 +231,7 @@ async function sendTelegramMessage(text) {
 async function notifyTelegramChanges(before, after) {
   if (!hasTelegramConfig()) return;
   const messages = buildTelegramMessages(before, after);
+  if (!messages.length) return;
   await Promise.all(messages.map(sendTelegramMessage));
 }
 
@@ -371,11 +372,30 @@ async function handleApi(req, res) {
   }
 }
 
+function handleStatus(req, res) {
+  sendJson(res, 200, {
+    ok: true,
+    supabase: {
+      configured: hasSupabaseConfig(),
+      table: supabaseTable,
+      appStateId,
+    },
+    telegram: {
+      configured: hasTelegramConfig(),
+      recipientCount: telegramChatIds.length,
+    },
+  });
+}
+
 http
   .createServer((req, res) => {
     const pathname = decodeURIComponent(req.url.split("?")[0]);
     if (pathname === "/api/vacation") {
       handleApi(req, res);
+      return;
+    }
+    if (pathname === "/api/status") {
+      handleStatus(req, res);
       return;
     }
 
