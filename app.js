@@ -626,7 +626,7 @@ function render() {
     <div class="app-shell">
       <header class="top">
         <div>
-          <p class="eyebrow">${isAdmin() ? "아빠 · 엄마 화면" : "개인 화면"}</p>
+          <p class="eyebrow">${isAdmin() ? "엄마 · 아빠 화면" : "개인 화면"}</p>
           <h1>${isAdmin() ? "방학 일과 관리" : `${student.name}의 오늘`}</h1>
           <button type="button" class="sync ${state.syncStatus === "online" ? "online" : ""}" onclick="loadRemote()">${state.syncStatus === "online" ? "서버 동기화" : state.syncStatus === "syncing" ? "동기화 확인" : "기기 저장"}</button>
         </div>
@@ -662,7 +662,7 @@ function renderLogin() {
         <p>방학 일과, 퀘스트, 버킷리스트를 가족이 함께 보고 관리합니다.</p>
       </section>
       <section class="login-options">
-        <button type="button" class="login-card admin-login" onclick="login('admin')"><span class="login-icon">P</span><strong>아빠 · 엄마</strong><small>세 아들 전체 일정 관리</small></button>
+        <button type="button" class="login-card admin-login" onclick="login('admin')"><span class="login-icon">P</span><strong>엄마 · 아빠</strong><small>세 아들 전체 일정 관리</small></button>
         ${state.data.students.map((student) => `<button type="button" class="login-card" onclick="login('student', '${student.id}')"><span class="login-icon" style="--student-color:${student.color}">${student.name.slice(-2, -1)}</span><strong>${student.name}</strong><small>${student.id}</small></button>`).join("")}
       </section>
     </main>
