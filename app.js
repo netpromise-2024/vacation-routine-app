@@ -1,7 +1,7 @@
 const API = "/api/vacation";
 const STORAGE_KEY = "vacation-routine-cache-v2";
 const SESSION_KEY = "vacation-routine-session-v1";
-const TODAY = "2026-07-22";
+const TODAY = todayString();
 const DAY_START = 7 * 60;
 const DAY_END = 23 * 60 + 30;
 const AXIS_END = 24 * 60;
@@ -35,6 +35,18 @@ let state = {
 };
 
 let saveTimer = null;
+
+function todayString() {
+  if (globalThis.__VACATION_TEST_TODAY__) {
+    return globalThis.__VACATION_TEST_TODAY__;
+  }
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function defaultData() {
   return {

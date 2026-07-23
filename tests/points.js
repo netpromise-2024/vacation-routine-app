@@ -10,6 +10,7 @@ const context = {
   console,
   setTimeout,
   clearTimeout,
+  __VACATION_TEST_TODAY__: "2026-07-22",
   crypto: { randomUUID: () => `test-${Math.random().toString(16).slice(2)}` },
   localStorage: {
     getItem: (key) => storage.get(key) || null,
