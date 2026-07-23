@@ -19,6 +19,7 @@ const contentTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".ics": "text/calendar; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
   ".sql": "text/sql; charset=utf-8",
   ".yaml": "text/yaml; charset=utf-8",
@@ -222,6 +223,98 @@ async function notifyTelegramChanges(before, after) {
   await Promise.all(messages.map(sendTelegramMessage));
 }
 
+function pad(value) {
+  return String(value).padStart(2, "0");
+}
+
+function toIcsDateTime(dateValue, timeValue) {
+  const date = new Date(`${dateValue}T${timeValue}:00+09:00`);
+  return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
+}
+
+function escapeIcs(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
+function foldIcsLine(line) {
+  const chunks = [];
+  let rest = line;
+  while (rest.length > 72) {
+    chunks.push(rest.slice(0, 72));
+    rest = ` ${rest.slice(72)}`;
+  }
+  chunks.push(rest);
+  return chunks.join("\r\n");
+}
+
+function calendarEventsFor(studentId, data) {
+  return data.schedules
+    .filter((item) => item.studentId === studentId && item.approvalStatus === "approved")
+    .filter((item) => item.date && item.start && item.end && item.title)
+    .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+}
+
+function buildCalendar(studentId, data) {
+  const student = data.students.find((item) => item.id === studentId);
+  if (!student) return null;
+  const now = new Date();
+  const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//OK Family//Vacation Routine//KO",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${escapeIcs(`${student.name} 방학 일과`)}`,
+    "X-WR-TIMEZONE:Asia/Seoul",
+  ];
+
+  calendarEventsFor(studentId, data).forEach((item) => {
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${escapeIcs(`${item.id}@ok-family-vacation`)}`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${toIcsDateTime(item.date, item.start)}`,
+      `DTEND:${toIcsDateTime(item.date, item.end)}`,
+      `SUMMARY:${escapeIcs(item.title)}`,
+      `DESCRIPTION:${escapeIcs([item.memo, item.category ? `category: ${item.category}` : ""].filter(Boolean).join("\n"))}`,
+      `LAST-MODIFIED:${stamp}`,
+      "BEGIN:VALARM",
+      "ACTION:DISPLAY",
+      "DESCRIPTION:10분 후 일정이 시작됩니다.",
+      "TRIGGER:-PT10M",
+      "END:VALARM",
+      "END:VEVENT",
+    );
+  });
+
+  lines.push("END:VCALENDAR");
+  return `${lines.map(foldIcsLine).join("\r\n")}\r\n`;
+}
+
+async function handleCalendar(req, res, pathname) {
+  const match = pathname.match(/^\/calendar\/([^/]+)\.ics$/);
+  if (!match) return false;
+  const studentId = decodeURIComponent(match[1]);
+  const data = await readData();
+  const calendar = buildCalendar(studentId, data);
+  if (!calendar) {
+    sendJson(res, 404, { error: "Calendar not found" });
+    return true;
+  }
+  res.writeHead(200, {
+    "Content-Type": "text/calendar; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Disposition": `inline; filename="${studentId}.ics"`,
+  });
+  res.end(calendar);
+  return true;
+}
+
 function sendJson(res, status, payload) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -275,27 +368,33 @@ http
       return;
     }
 
-    const filePath = pathname === "/" ? "/index.html" : pathname;
-    const file = path.normalize(path.join(root, filePath));
+    handleCalendar(req, res, pathname)
+      .then((handled) => {
+        if (handled) return;
 
-    if (!file.startsWith(root)) {
-      res.writeHead(403);
-      res.end("forbidden");
-      return;
-    }
+        const filePath = pathname === "/" ? "/index.html" : pathname;
+        const file = path.normalize(path.join(root, filePath));
 
-    fs.readFile(file, (error, data) => {
-      if (error) {
-        res.writeHead(404);
-        res.end("not found");
-        return;
-      }
-      res.writeHead(200, {
-        "Content-Type": contentTypes[path.extname(file)] || "application/octet-stream",
-        "Cache-Control": "no-store",
-      });
-      res.end(data);
-    });
+        if (!file.startsWith(root)) {
+          res.writeHead(403);
+          res.end("forbidden");
+          return;
+        }
+
+        fs.readFile(file, (error, data) => {
+          if (error) {
+            res.writeHead(404);
+            res.end("not found");
+            return;
+          }
+          res.writeHead(200, {
+            "Content-Type": contentTypes[path.extname(file)] || "application/octet-stream",
+            "Cache-Control": "no-store",
+          });
+          res.end(data);
+        });
+      })
+      .catch((error) => sendJson(res, 500, { error: error.message || "Server error" }));
   })
   .listen(port, host, () => {
     const storage = hasSupabaseConfig() ? "Supabase" : "local file";

@@ -624,6 +624,7 @@ function render() {
         </div>
       </header>
       ${isAdmin() ? renderStudentTabs() : renderPersonalBadge(student)}
+      ${renderCalendarConnect(student)}
       ${isAdmin() ? renderApprovalQueue() : ""}
       <nav class="tabs">
         ${tabButton("day", "day", "일 보기")}
@@ -694,6 +695,40 @@ function renderApprovalQueueItem(item) {
 
 function renderPersonalBadge(student) {
   return `<section class="personal-badge"><strong>${student.name}</strong><span>내 일정과 퀘스트만 표시됩니다.</span></section>`;
+}
+
+function calendarHttpsUrl(studentId) {
+  return `${location.origin}/calendar/${encodeURIComponent(studentId)}.ics`;
+}
+
+function calendarWebcalUrl(studentId) {
+  return calendarHttpsUrl(studentId).replace(/^https?:\/\//, "webcal://");
+}
+
+function renderCalendarConnect(student) {
+  return `
+    <section class="calendar-connect">
+      <div><strong>아이폰 캘린더 연결</strong><span>${student.name} 승인 일정 · 10분 전 알림</span></div>
+      <div class="calendar-actions">
+        <button type="button" class="mini success" onclick="openCalendarSubscription('${student.id}')">연결</button>
+        <button type="button" class="mini subtle" onclick="copyCalendarUrl('${student.id}')">주소 복사</button>
+      </div>
+    </section>
+  `;
+}
+
+function openCalendarSubscription(studentId) {
+  window.location.href = calendarWebcalUrl(studentId);
+}
+
+async function copyCalendarUrl(studentId) {
+  const url = calendarHttpsUrl(studentId);
+  try {
+    await navigator.clipboard.writeText(url);
+    alert("캘린더 구독 주소를 복사했습니다.");
+  } catch {
+    prompt("캘린더 구독 주소입니다.", url);
+  }
 }
 
 function tabButton(view, iconName, label) {
@@ -922,6 +957,8 @@ Object.assign(window, {
   addQuestProgress,
   deleteQuest,
   closeForms,
+  openCalendarSubscription,
+  copyCalendarUrl,
   syncScheduleEndTime,
   timelinePointerDown,
   timelinePointerMove,

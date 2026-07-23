@@ -72,6 +72,8 @@ async function waitForServer() {
       category: "study",
       memo: "",
       done: true,
+      createdBy: "parent",
+      approvalStatus: "approved",
       updatedAt: new Date().toISOString(),
     });
 
@@ -80,6 +82,10 @@ async function waitForServer() {
 
     const reread = await request("GET", "/api/vacation");
     if (!reread.body.includes("five-minute-test")) throw new Error("API did not persist written data");
+
+    const calendar = await request("GET", "/calendar/hyeon1.ics");
+    if (calendar.statusCode !== 200 || !calendar.body.includes("BEGIN:VCALENDAR")) throw new Error("Calendar did not render");
+    if (!calendar.body.includes("five minute test") || !calendar.body.includes("BEGIN:VALARM")) throw new Error("Calendar event or alarm is missing");
 
     console.log("vacation routine smoke test passed");
   } finally {
