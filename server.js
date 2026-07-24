@@ -11,6 +11,7 @@ const supabaseUrl = trimTrailingSlash(process.env.SUPABASE_URL || "");
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabaseTable = process.env.SUPABASE_TABLE || "vacation_app_state";
 const appStateId = process.env.APP_STATE_ID || "family-vacation-routine";
+const configuredAppBaseUrl = trimTrailingSlash(process.env.APP_BASE_URL || "");
 const telegramTargets = parseTelegramTargets();
 
 const contentTypes = {
@@ -180,6 +181,13 @@ function studentName(studentId, data) {
   return data.students.find((student) => student.id === studentId)?.name || studentId;
 }
 
+function requestBaseUrl(req) {
+  if (configuredAppBaseUrl) return configuredAppBaseUrl;
+  const protocol = req.headers["x-forwarded-proto"] || "https";
+  const hostHeader = req.headers["x-forwarded-host"] || req.headers.host || "vacation-routine-app.onrender.com";
+  return trimTrailingSlash(`${protocol}://${hostHeader}`);
+}
+
 function scheduleNoticeType(previous, item) {
   if (!previous) return item.createdBy === "student" ? "아이 일정 등록" : "부모 일정 공유";
   if (item.createdBy !== "student") return "";
@@ -189,7 +197,7 @@ function scheduleNoticeType(previous, item) {
   return "";
 }
 
-function buildTelegramMessages(before, after) {
+function buildTelegramMessages(before, after, appUrl = "") {
   const previousSchedules = new Map(before.schedules.map((item) => [item.id, item]));
   const previousQuests = new Map(before.quests.map((item) => [item.id, item]));
   const messages = [];
@@ -204,7 +212,8 @@ function buildTelegramMessages(before, after) {
         `날짜: ${item.date}`,
         `시간: ${item.start}~${item.end}`,
         `내용: ${item.title}`,
-      ].join("\n"),
+        appUrl ? `바로가기: ${appUrl}` : "",
+      ].filter(Boolean).join("\n"),
     );
   });
 
@@ -216,7 +225,8 @@ function buildTelegramMessages(before, after) {
         `아이: ${item.studentId === "all" ? "공통" : studentName(item.studentId, after)}`,
         `퀘스트: ${item.title}`,
         `완료 기준: ${item.target || 1}회`,
-      ].join("\n"),
+        appUrl ? `바로가기: ${appUrl}` : "",
+      ].filter(Boolean).join("\n"),
     );
   });
 
@@ -238,9 +248,9 @@ async function sendTelegramMessage(text) {
   );
 }
 
-async function notifyTelegramChanges(before, after) {
+async function notifyTelegramChanges(before, after, appUrl = "") {
   if (!hasTelegramConfig()) return;
-  const messages = buildTelegramMessages(before, after);
+  const messages = buildTelegramMessages(before, after, appUrl);
   if (!messages.length) return;
   await Promise.all(messages.map(sendTelegramMessage));
 }
@@ -371,7 +381,7 @@ async function handleApi(req, res) {
       const body = await readBody(req);
       const before = await readData();
       const after = await writeData(JSON.parse(body || "{}"));
-      notifyTelegramChanges(before, after).catch((error) => console.error(error.message || error));
+      notifyTelegramChanges(before, after, requestBaseUrl(req)).catch((error) => console.error(error.message || error));
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -394,6 +404,9 @@ function handleStatus(req, res) {
       configured: hasTelegramConfig(),
       recipientCount: telegramTargets.length,
       botCount: new Set(telegramTargets.map((target) => target.botToken)).size,
+    },
+    app: {
+      baseUrl: configuredAppBaseUrl || null,
     },
   });
 }
