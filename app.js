@@ -411,6 +411,12 @@ function setDate(value) {
   render();
 }
 
+function openDay(value) {
+  state.selectedDate = value;
+  state.view = "day";
+  render();
+}
+
 function openScheduleForm(id = "", draft = null) {
   const existing = state.data.schedules.find((item) => item.id === id);
   state.editingSchedule =
@@ -852,7 +858,7 @@ function renderWeek() {
       ${dates.map((date) => {
         const items = schedulesFor(state.selectedStudent, date);
         const rate = completionRate(items);
-        return `<article class="day-column ${date === state.selectedDate ? "active" : ""}" onclick="setDate('${date}')"><header><strong>${dayName(date)}</strong><span>${date.slice(5).replace("-", "/")}</span></header><div class="mini-bar"><span style="height:${rate}%"></span></div><div class="week-events">${items.slice(0, 4).map((item) => `<p>${item.start} ${escapeHtml(item.title)}</p>`).join("")}${items.length > 4 ? `<p>+${items.length - 4}개</p>` : ""}</div></article>`;
+        return `<article class="day-column ${date === state.selectedDate ? "active" : ""}" onclick="setDate('${date}')" ondblclick="openDay('${date}')" title="두 번 클릭하면 일 보기로 이동합니다."><header><strong>${dayName(date)}</strong><span>${date.slice(5).replace("-", "/")}</span></header><div class="mini-bar"><span style="height:${rate}%"></span></div><div class="week-events">${items.slice(0, 4).map((item) => `<p>${item.start} ${escapeHtml(item.title)}</p>`).join("")}${items.length > 4 ? `<p>+${items.length - 4}개</p>` : ""}</div></article>`;
       }).join("")}
     </section>
   `;
@@ -954,6 +960,7 @@ Object.assign(window, {
   selectStudent,
   switchView,
   setDate,
+  openDay,
   openScheduleForm,
   saveSchedule,
   toggleSchedule,
