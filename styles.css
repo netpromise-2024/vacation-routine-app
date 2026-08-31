@@ -1318,6 +1318,27 @@ button:active {
   margin-bottom: 18px;
 }
 
+.child-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.child-topline .eyebrow {
+  margin: 0;
+}
+
+.child-logout {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: #6f675c;
+  background: #f2eee6;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .today-hero h1 {
   color: #3e5239;
   font-size: 30px;

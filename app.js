@@ -758,7 +758,7 @@ function renderChildToday(student) {
   if (!items.length) return `<section class="child-empty"><h2>오늘 시간표를 불러오지 못했어요.</h2><p>새로고침 후 다시 확인해 주세요.</p></section>`;
   return `
     <section class="today-hero">
-      <p class="eyebrow">오늘의 루틴</p>
+      <div class="child-topline"><p class="eyebrow">오늘의 루틴</p><button type="button" class="child-logout" onclick="logout()">로그아웃</button></div>
       <h1>${student.name}의 오늘</h1>
       <p>${shortDate(state.selectedDate)} · 완료 ${completed}/${items.length}</p>
     </section>
