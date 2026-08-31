@@ -5,6 +5,7 @@ const { spawn } = require("child_process");
 const node = process.execPath;
 const cwd = path.join(__dirname, "..");
 const port = 4207;
+let sessionCookie = "";
 
 function request(method, urlPath, body) {
   return new Promise((resolve, reject) => {
@@ -15,14 +16,15 @@ function request(method, urlPath, body) {
         hostname: "127.0.0.1",
         port,
         path: urlPath,
-        headers: payload
-          ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }
-          : {},
+        headers: {
+          ...(payload ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) } : {}),
+          ...(sessionCookie ? { Cookie: sessionCookie } : {}),
+        },
       },
       (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => resolve({ statusCode: res.statusCode, body: data }));
+        res.on("end", () => resolve({ statusCode: res.statusCode, body: data, headers: res.headers }));
       },
     );
     req.on("error", reject);
@@ -46,7 +48,16 @@ async function waitForServer() {
 (async () => {
   const child = spawn(node, ["server.js"], {
     cwd,
-    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      HOST: "127.0.0.1",
+      FAMILY_PIN_HYEON1: "test-student-one-pin",
+      FAMILY_PIN_HYEON2: "test-student-two-pin",
+      FAMILY_PIN_HYEON3: "test-student-three-pin",
+      FAMILY_PIN_PARENT: "test-parent-pin",
+      SESSION_SECRET: "test-session-secret-that-is-long-enough",
+    },
     stdio: "ignore",
   });
 
@@ -55,6 +66,10 @@ async function waitForServer() {
 
     const home = await request("GET", "/");
     if (home.statusCode !== 200 || !home.body.includes("app.js")) throw new Error("HTML did not render");
+
+    const login = await request("POST", "/api/login", { identity: "parent", pin: "test-parent-pin" });
+    if (login.statusCode !== 200 || !login.headers["set-cookie"]?.[0]) throw new Error("Parent login failed");
+    sessionCookie = login.headers["set-cookie"][0].split(";", 1)[0];
 
     const data = await request("GET", "/api/vacation");
     if (data.statusCode !== 200) throw new Error("API did not return data");

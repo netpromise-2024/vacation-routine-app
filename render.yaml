@@ -4,11 +4,22 @@ services:
     runtime: node
     plan: free
     buildCommand: "npm install"
-    startCommand: "node server.js"
+    startCommand: "node scripts/migrate-turso.js && node server.js"
     envVars:
-      - key: SUPABASE_URL
+      # Required server-only credentials. Set their values in Render; never commit them.
+      - key: FAMILY_PIN_HYEON1
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: FAMILY_PIN_HYEON2
+        sync: false
+      - key: FAMILY_PIN_HYEON3
+        sync: false
+      - key: FAMILY_PIN_PARENT
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
         sync: false
       - key: APP_BASE_URL
         value: https://vacation-routine-app.onrender.com

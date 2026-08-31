@@ -1,6 +1,5 @@
 const API = "/api/vacation";
 const STORAGE_KEY = "vacation-routine-cache-v2";
-const SESSION_KEY = "vacation-routine-session-v1";
 const TODAY = todayString();
 const DAY_START = 7 * 60;
 const DAY_END = 23 * 60 + 30;
@@ -30,7 +29,9 @@ let state = {
   editingQuest: null,
   dragDraft: null,
   syncStatus: "syncing",
-  session: loadSession(),
+  activeStudy: null,
+  studySheet: null,
+  session: null,
   data: loadCache(),
 };
 
@@ -51,10 +52,12 @@ function todayString() {
 function defaultData() {
   return {
     students: [
-      { id: "hyeon1", name: "옥승현", color: "#3182f6" },
-      { id: "hyeon2", name: "옥수현", color: "#03b26c" },
-      { id: "hyeon3", name: "옥서현", color: "#8b5cf6" },
+      { id: "hyeon1", name: "옥승현", color: "#58714d" },
+      { id: "hyeon2", name: "옥수현", color: "#c96542" },
+      { id: "hyeon3", name: "옥서현", color: "#d09a3f" },
     ],
+    weeklyTemplate: [],
+    checkins: [],
     schedules: [
       seedSchedule("hyeon1", TODAY, "09:00", "09:50", "수학 문제풀이", "study"),
       seedSchedule("hyeon1", TODAY, "10:00", "10:30", "독서", "habit"),
@@ -82,11 +85,6 @@ function cryptoId() {
   return globalThis.crypto?.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function loadSession() {
-  localStorage.removeItem(SESSION_KEY);
-  return null;
-}
-
 function saveSession(session) {
   state.session = session;
 }
@@ -111,6 +109,8 @@ function normalizeData(data) {
   }));
   return {
     students,
+    weeklyTemplate: Array.isArray(data?.weeklyTemplate) ? data.weeklyTemplate : fallback.weeklyTemplate,
+    checkins: Array.isArray(data?.checkins) ? data.checkins : fallback.checkins,
     schedules: (Array.isArray(data?.schedules) ? data.schedules : fallback.schedules).map(normalizeSchedule),
     quests: (Array.isArray(data?.quests) ? data.quests : fallback.quests).map(normalizeQuest),
   };
@@ -146,14 +146,56 @@ function saveCache() {
 async function loadRemote() {
   try {
     const response = await fetch(API, { cache: "no-store" });
+    if (response.status === 401) throw new Error("Authentication required");
     if (!response.ok) throw new Error("API unavailable");
-    state.data = normalizeData(await response.json());
+    const localCheckins = state.data.checkins || [];
+    const remoteData = normalizeData(await response.json());
+    state.data = {
+      ...remoteData,
+      checkins: localCheckins.reduce((merged, checkin) => RoutineModel.upsertCheckin(merged, checkin), remoteData.checkins || []),
+    };
     state.syncStatus = "online";
     saveCache();
+  } catch (error) {
+    if (error.message === "Authentication required") {
+      state.session = null;
+      state.syncStatus = "offline";
+    } else {
+      state.syncStatus = "local";
+    }
+  }
+  applySessionStudent();
+  render();
+}
+
+async function loadBundledTemplate() {
+  try {
+    const response = await fetch("./weekly-template.json", { cache: "no-store" });
+    if (!response.ok) throw new Error("Template unavailable");
+    const weeklyTemplate = await response.json();
+    if (Array.isArray(weeklyTemplate)) {
+      state.data.weeklyTemplate = weeklyTemplate;
+      saveCache();
+    }
+  } catch {
+    // The child UI shows a clear reload message when the bundled timetable cannot be read.
+  }
+  render();
+}
+
+async function saveCheckinRemote(checkin) {
+  saveCache();
+  try {
+    const response = await fetch("/api/checkins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(checkin),
+    });
+    if (!response.ok) throw new Error("Check-in save failed");
+    state.syncStatus = "online";
   } catch {
     state.syncStatus = "local";
   }
-  applySessionStudent();
   render();
 }
 
@@ -194,7 +236,7 @@ function icon(name) {
 }
 
 function isAdmin() {
-  return state.session?.role === "admin";
+  return state.session?.role === "parent";
 }
 
 function applySessionStudent() {
@@ -204,17 +246,39 @@ function applySessionStudent() {
   }
 }
 
-function login(role, studentId = "") {
-  saveSession(role === "admin" ? { role: "admin" } : { role: "student", studentId });
-  if (studentId) state.selectedStudent = studentId;
-  state.view = "day";
-  render();
+async function login(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const identity = String(form.get("identity") || "");
+  const pin = String(form.get("pin") || "");
+  const error = event.currentTarget.querySelector(".login-error");
+  if (!identity || !pin) return;
+  try {
+    const response = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identity, pin }),
+    });
+    if (!response.ok) throw new Error("PIN이 맞지 않습니다.");
+    const payload = await response.json();
+    saveSession(payload.session);
+    if (payload.session.studentId) state.selectedStudent = payload.session.studentId;
+    state.view = "day";
+    await loadRemote();
+  } catch (loginError) {
+    if (error) error.textContent = loginError.message || "로그인에 실패했습니다.";
+  }
 }
 
-function logout() {
-  state.session = null;
-  localStorage.removeItem(SESSION_KEY);
-  render();
+async function logout() {
+  try {
+    await fetch("/api/logout", { method: "POST" });
+  } finally {
+    state.session = null;
+    state.activeStudy = null;
+    state.studySheet = null;
+    render();
+  }
 }
 
 function currentStudent() {
@@ -614,6 +678,108 @@ function renderTimelineDraft() {
   draft.hidden = false;
 }
 
+function routineItemsFor(studentId, date) {
+  return RoutineModel.occurrencesForDate(state.data.weeklyTemplate, studentId, date, state.data.checkins);
+}
+
+function completeRoutine(templateId) {
+  const item = routineItemsFor(state.selectedStudent, state.selectedDate).find((occurrence) => occurrence.id === templateId);
+  if (!item) return;
+  const checkin = {
+    studentId: item.studentId,
+    date: item.date,
+    templateId: item.id,
+    status: "completed",
+    completedAt: new Date().toISOString(),
+  };
+  state.data.checkins = RoutineModel.upsertCheckin(state.data.checkins, checkin);
+  saveCheckinRemote(checkin);
+  render();
+}
+
+function startStudy(templateId) {
+  const item = routineItemsFor(state.selectedStudent, state.selectedDate).find((occurrence) => occurrence.id === templateId);
+  if (!item) return;
+  state.activeStudy = { templateId, startedAt: new Date().toISOString() };
+  render();
+}
+
+function finishStudy(templateId) {
+  if (!state.activeStudy || state.activeStudy.templateId !== templateId) return;
+  state.studySheet = { templateId, startedAt: state.activeStudy.startedAt };
+  state.activeStudy = null;
+  render();
+}
+
+function saveStudyRecord(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const templateId = form.get("templateId");
+  const item = routineItemsFor(state.selectedStudent, state.selectedDate).find((occurrence) => occurrence.id === templateId);
+  if (!item) return;
+  const checkin = {
+    studentId: item.studentId,
+    date: item.date,
+    templateId: item.id,
+    status: "completed",
+    studyNote: String(form.get("studyNote") || "").trim(),
+    startedAt: state.studySheet?.startedAt || new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+  };
+  state.data.checkins = RoutineModel.upsertCheckin(state.data.checkins, checkin);
+  state.studySheet = null;
+  saveCheckinRemote(checkin);
+  render();
+}
+
+function closeStudySheet() {
+  state.studySheet = null;
+  render();
+}
+
+function inlineArgument(value) {
+  return escapeAttr(JSON.stringify(String(value)));
+}
+
+function routineAction(item) {
+  const templateId = inlineArgument(item.id);
+  if (item.status === "completed") return `<span class="routine-complete">완료</span>`;
+  if (item.category !== "study") return `<button type="button" class="routine-action" onclick="completeRoutine(${templateId})">완료</button>`;
+  if (state.activeStudy?.templateId === item.id) return `<button type="button" class="routine-action active" onclick="finishStudy(${templateId})">공부 마침</button>`;
+  return `<button type="button" class="routine-action" onclick="startStudy(${templateId})">공부 시작</button>`;
+}
+
+function renderChildToday(student) {
+  const items = routineItemsFor(student.id, state.selectedDate);
+  const remaining = items.filter((item) => item.status !== "completed");
+  const priority = remaining.find((item) => item.category === "study") || remaining[0];
+  const completed = items.filter((item) => item.status === "completed").length;
+  const studyRecords = items.filter((item) => item.category === "study" && item.status === "completed" && item.studyNote);
+  if (!items.length) return `<section class="child-empty"><h2>오늘 시간표를 불러오지 못했어요.</h2><p>새로고침 후 다시 확인해 주세요.</p></section>`;
+  return `
+    <section class="today-hero">
+      <p class="eyebrow">오늘의 루틴</p>
+      <h1>${student.name}의 오늘</h1>
+      <p>${shortDate(state.selectedDate)} · 완료 ${completed}/${items.length}</p>
+    </section>
+    <section class="now-card">
+      <span>${priority ? "다음 할 일" : "오늘 일정 완료"}</span>
+      ${priority ? `<strong>${escapeHtml(priority.title)}</strong><p>${priority.start}–${priority.end} · ${categoryLabel(priority.category)}</p>${routineAction(priority)}` : `<strong>오늘 일정을 모두 마쳤어요.</strong><p>공부 기록은 아래에서 다시 볼 수 있어요.</p>`}
+    </section>
+    <section class="routine-section">
+      <div class="routine-head"><h2>오늘 일정</h2><span>${items.length}개</span></div>
+      <div class="routine-list">${items.map((item) => `<article class="routine-row ${item.status === "completed" ? "done" : ""}"><time>${item.start}<span>${item.end}</span></time><div><strong>${escapeHtml(item.title)}</strong><p>${categoryLabel(item.category)}${item.studyNote ? ` · ${escapeHtml(item.studyNote)}` : ""}</p></div>${routineAction(item)}</article>`).join("")}</div>
+    </section>
+    ${studyRecords.length ? `<section class="study-log"><h2>오늘 공부 기록</h2>${studyRecords.map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${escapeHtml(item.studyNote)}</p>`).join("")}</section>` : ""}
+  `;
+}
+
+function renderStudySheet() {
+  const item = routineItemsFor(state.selectedStudent, state.selectedDate).find((occurrence) => occurrence.id === state.studySheet?.templateId);
+  if (!item) return "";
+  return `<div class="sheet-backdrop"><section class="study-sheet"><header><div><p>공부 기록</p><h2>${escapeHtml(item.title)}</h2></div><button type="button" onclick="closeStudySheet()">${icon("close")}</button></header><form class="form" onsubmit="saveStudyRecord(event)"><input type="hidden" name="templateId" value="${escapeAttr(item.id)}" /><label>오늘 한 공부<input name="studyNote" required maxlength="140" placeholder="예: 수학 문제집 34~41쪽" /></label><button type="submit" class="primary">기록 완료</button></form></section></div>`;
+}
+
 function render() {
   if (!state.session) {
     renderLogin();
@@ -624,31 +790,14 @@ function render() {
   const student = currentStudent();
   const items = schedulesFor(student.id, state.selectedDate);
   const points = pointsFor(student.id);
+  const isParent = isAdmin();
   app.innerHTML = `
-    <div class="app-shell">
-      <header class="top">
-        <div>
-          <p class="eyebrow">${isAdmin() ? "엄마 · 아빠 화면" : "개인 화면"}</p>
-          <h1>${isAdmin() ? "방학 일과 관리" : `${student.name}의 오늘`}</h1>
-          <button type="button" class="sync ${state.syncStatus === "online" ? "online" : ""}" onclick="loadRemote()">${state.syncStatus === "online" ? "서버 동기화" : state.syncStatus === "syncing" ? "동기화 확인" : "기기 저장"}</button>
-        </div>
-        <div class="top-actions">
-          <div class="level"><strong>Lv.${levelFor(points)}</strong><span>${points}P</span></div>
-          <button type="button" class="logout" onclick="logout()" title="로그아웃">${icon("logout")}</button>
-        </div>
-      </header>
-      ${isAdmin() ? renderStudentTabs() : renderPersonalBadge(student)}
-      ${renderCalendarConnect(student)}
-      ${isAdmin() ? renderApprovalQueue() : ""}
-      <nav class="tabs">
-        ${tabButton("day", "day", "일 보기")}
-        ${tabButton("week", "week", "주 보기")}
-        ${tabButton("quests", "quest", "퀘스트")}
-      </nav>
-      <main>${state.view === "week" ? renderWeek() : state.view === "quests" ? renderQuests() : renderDay(items)}</main>
+    <div class="app-shell ${isParent ? "admin-shell" : "child-shell"}">
+      ${isParent ? `<header class="top"><div><p class="eyebrow">엄마 · 아빠 화면</p><h1>가족 일정 관리</h1><button type="button" class="sync ${state.syncStatus === "online" ? "online" : ""}" onclick="loadRemote()">${state.syncStatus === "online" ? "서버 동기화" : "동기화 확인"}</button></div><div class="top-actions"><button type="button" class="logout" onclick="logout()" title="로그아웃">${icon("logout")}</button></div></header>${renderStudentTabs()}${renderApprovalQueue()}<nav class="tabs">${tabButton("day", "day", "일 보기")}${tabButton("week", "week", "주 보기")}${tabButton("quests", "quest", "퀘스트")}</nav><main>${state.view === "week" ? renderWeek() : state.view === "quests" ? renderQuests() : renderDay(items)}</main>` : `<main>${renderChildToday(student)}</main>`}
     </div>
     ${state.editingSchedule ? renderScheduleSheet() : ""}
     ${state.editingQuest ? renderQuestSheet() : ""}
+    ${state.studySheet ? renderStudySheet() : ""}
   `;
 }
 
@@ -664,8 +813,17 @@ function renderLogin() {
         <p>방학 일과, 퀘스트, 버킷리스트를 가족이 함께 보고 관리합니다.</p>
       </section>
       <section class="login-options">
-        <button type="button" class="login-card admin-login" onclick="login('admin')"><span class="login-icon">P</span><strong>엄마 · 아빠</strong><small>세 아들 전체 일정 관리</small></button>
-        ${state.data.students.map((student) => `<button type="button" class="login-card" onclick="login('student', '${student.id}')"><span class="login-icon" style="--student-color:${student.color}">${student.name.slice(-2, -1)}</span><strong>${student.name}</strong><small>${student.id}</small></button>`).join("")}
+        <form class="form login-form" onsubmit="login(event)">
+          <label>사용자
+            <select name="identity" required>
+              <option value="parent">엄마 · 아빠 — 전체 일정 관리</option>
+              ${state.data.students.map((student) => `<option value="${student.id}">${student.name}</option>`).join("")}
+            </select>
+          </label>
+          <label>PIN<input name="pin" type="password" inputmode="numeric" autocomplete="current-password" required /></label>
+          <p class="login-error" role="alert"></p>
+          <button type="submit" class="primary">로그인</button>
+        </form>
       </section>
     </main>
   `;
@@ -895,7 +1053,18 @@ function studentName(id) {
 }
 
 function categoryLabel(category) {
-  return { study: "공부", habit: "습관", play: "놀이", chore: "집안일", rest: "휴식" }[category] || "기타";
+  return {
+    study: "공부",
+    reading: "독서",
+    school: "학교",
+    home: "생활",
+    arts: "예체능",
+    rest: "휴식",
+    test: "시험",
+    habit: "습관",
+    play: "놀이",
+    chore: "집안일",
+  }[category] || "기타";
 }
 
 function renderScheduleSheet() {
@@ -978,7 +1147,25 @@ Object.assign(window, {
   timelinePointerDown,
   timelinePointerMove,
   timelinePointerUp,
+  completeRoutine,
+  startStudy,
+  finishStudy,
+  saveStudyRecord,
+  closeStudySheet,
 });
 
+async function initialize() {
+  try {
+    const response = await fetch("/api/session", { cache: "no-store" });
+    if (!response.ok) throw new Error("Session unavailable");
+    const payload = await response.json();
+    saveSession(payload.session);
+    if (state.session) await loadRemote();
+  } catch {
+    state.session = null;
+  }
+  render();
+}
+
 render();
-loadRemote();
+initialize();

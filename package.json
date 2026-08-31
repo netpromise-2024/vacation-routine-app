@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/smoke.js && node tests/points.js"
+    "migrate:turso": "node scripts/migrate-turso.js",
+    "test": "node tests/security.js && node tests/render-env.js && node tests/static-files.js && node tests/session-secret.js && node tests/login-rate-limit.js && node tests/auth.js && node tests/smoke.js && node tests/points.js && node tests/routine-model.js && node tests/weekly-template.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4"
   }
 }

@@ -1302,6 +1302,235 @@ button:active {
   transform: scale(0.985);
 }
 
+.child-shell {
+  min-height: 100vh;
+  padding: 28px 20px 44px;
+  background:
+    linear-gradient(180deg, #fff8ed 0, #f6f7fb 280px),
+    var(--bg);
+}
+
+.child-shell main {
+  padding: 0;
+}
+
+.today-hero {
+  margin-bottom: 18px;
+}
+
+.today-hero h1 {
+  color: #3e5239;
+  font-size: 30px;
+  line-height: 40px;
+}
+
+.today-hero > p:last-child {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+}
+
+.now-card {
+  padding: 22px;
+  border-radius: 20px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #536044, #7c8b55);
+  box-shadow: 0 16px 32px rgba(62, 82, 57, 0.2);
+}
+
+.now-card > span {
+  display: block;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 13px;
+  line-height: 19px;
+  font-weight: 800;
+}
+
+.now-card strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 26px;
+  line-height: 34px;
+  font-weight: 900;
+  word-break: keep-all;
+}
+
+.now-card p {
+  margin: 4px 0 18px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 700;
+}
+
+.routine-action,
+.routine-complete {
+  flex: 0 0 auto;
+  min-width: 76px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 900;
+}
+
+.routine-action {
+  color: #ffffff;
+  background: #c7783c;
+}
+
+.routine-action.active {
+  background: #9a4e32;
+}
+
+.now-card .routine-action {
+  color: #536044;
+  background: #ffffff;
+}
+
+.now-card .routine-action.active {
+  color: #ffffff;
+  background: #9a4e32;
+}
+
+.routine-complete {
+  color: #3e5239;
+  background: #e8f0e3;
+}
+
+.routine-section,
+.study-log,
+.child-empty {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid rgba(184, 175, 161, 0.58);
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.routine-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.routine-head h2,
+.study-log h2,
+.child-empty h2 {
+  color: #3e5239;
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.routine-head span {
+  color: #6f675c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.routine-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 70px;
+  border-bottom: 1px solid #f0ede7;
+}
+
+.routine-row:last-child {
+  border-bottom: 0;
+}
+
+.routine-row.done {
+  opacity: 0.64;
+}
+
+.routine-row time {
+  color: #6f675c;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 900;
+}
+
+.routine-row time span {
+  display: block;
+  color: #a39b8f;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.routine-row strong {
+  display: block;
+  color: #2d2a26;
+  font-size: 16px;
+  line-height: 23px;
+  font-weight: 900;
+  word-break: keep-all;
+}
+
+.routine-row p,
+.study-log p,
+.child-empty p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+
+.study-log p {
+  padding: 10px 0;
+  border-top: 1px solid #f0ede7;
+}
+
+.study-log strong {
+  color: #7a571f;
+}
+
+.study-sheet {
+  width: min(560px, 100%);
+  max-height: 92vh;
+  margin: 0 auto;
+  overflow: auto;
+  padding: 24px 20px max(24px, env(safe-area-inset-bottom));
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background: var(--surface);
+  box-shadow: 0 -20px 40px rgba(15, 16, 22, 0.16);
+}
+
+.study-sheet header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.study-sheet header p {
+  margin: 0 0 3px;
+  color: #7c8b55;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.study-sheet header button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  color: var(--text);
+  background: var(--grey-100);
+}
+
 @media (min-width: 760px) {
   .app-shell,
   .login-screen {

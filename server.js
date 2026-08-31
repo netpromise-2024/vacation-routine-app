@@ -1,6 +1,9 @@
 const http = require("http");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const RoutineModel = require("./routine");
+const { createClient } = require("@libsql/client");
 
 const root = __dirname;
 const port = Number(process.env.PORT || 4177);
@@ -10,6 +13,13 @@ const dataPath = path.join(dataDir, "vacation-data.json");
 const supabaseUrl = trimTrailingSlash(process.env.SUPABASE_URL || "");
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabaseTable = process.env.SUPABASE_TABLE || "vacation_app_state";
+const tursoDatabaseUrl = process.env.TURSO_DATABASE_URL || "";
+const tursoAuthToken = process.env.TURSO_AUTH_TOKEN || "";
+const requiredEnvironmentVariables = ["FAMILY_PIN_HYEON1", "FAMILY_PIN_HYEON2", "FAMILY_PIN_HYEON3", "FAMILY_PIN_PARENT", "SESSION_SECRET"];
+const missingEnvironmentVariables = requiredEnvironmentVariables.filter((name) => !process.env[name]);
+if (missingEnvironmentVariables.length) throw new Error(`Missing required environment variables: ${missingEnvironmentVariables.join(", ")}`);
+if (Boolean(tursoDatabaseUrl) !== Boolean(tursoAuthToken)) throw new Error("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be configured together");
+const tursoClient = tursoDatabaseUrl ? createClient({ url: tursoDatabaseUrl, authToken: tursoAuthToken }) : null;
 const appStateId = process.env.APP_STATE_ID || "family-vacation-routine";
 const configuredAppBaseUrl = trimTrailingSlash(process.env.APP_BASE_URL || "");
 const telegramTargets = parseTelegramTargets();
@@ -26,13 +36,103 @@ const contentTypes = {
 };
 
 const canonicalStudents = [
-  { id: "hyeon1", name: "옥승현", color: "#3182f6" },
-  { id: "hyeon2", name: "옥수현", color: "#03b26c" },
-  { id: "hyeon3", name: "옥서현", color: "#8b5cf6" },
+  { id: "hyeon1", name: "옥승현", color: "#58714d" },
+  { id: "hyeon2", name: "옥수현", color: "#c96542" },
+  { id: "hyeon3", name: "옥서현", color: "#d09a3f" },
 ];
+
+const sessionCookieName = "family_session";
+const sessionTtlSeconds = 60 * 60 * 12;
+const pinByIdentity = {
+  hyeon1: process.env.FAMILY_PIN_HYEON1 || "",
+  hyeon2: process.env.FAMILY_PIN_HYEON2 || "",
+  hyeon3: process.env.FAMILY_PIN_HYEON3 || "",
+  parent: process.env.FAMILY_PIN_PARENT || "",
+};
+const sessionSigningKey = process.env.SESSION_SECRET;
+
+function base64Url(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function signSessionPayload(encodedPayload) {
+  return crypto.createHmac("sha256", sessionSigningKey).update(encodedPayload).digest("base64url");
+}
+
+function createSession(identity) {
+  const session = identity === "parent" ? { role: "parent" } : { role: "student", studentId: identity };
+  const encodedPayload = base64Url(JSON.stringify({ ...session, exp: Math.floor(Date.now() / 1000) + sessionTtlSeconds }));
+  return `${encodedPayload}.${signSessionPayload(encodedPayload)}`;
+}
+
+function parseCookies(req) {
+  return Object.fromEntries(
+    String(req.headers.cookie || "")
+      .split(";")
+      .map((entry) => entry.trim().split(/=(.*)/s))
+      .filter(([name]) => name)
+      .map(([name, value]) => [name, decodeURIComponent(value || "")]),
+  );
+}
+
+function sessionFromRequest(req) {
+  const token = parseCookies(req)[sessionCookieName];
+  if (!token) return null;
+  const [encodedPayload, signature] = token.split(".");
+  if (!encodedPayload || !signature) return null;
+  const expected = signSessionPayload(encodedPayload);
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    if (!payload || payload.exp <= Math.floor(Date.now() / 1000)) return null;
+    if (payload.role === "parent") return { role: "parent" };
+    if (payload.role === "student" && canonicalStudents.some((student) => student.id === payload.studentId)) return { role: "student", studentId: payload.studentId };
+  } catch {
+    // Treat malformed or forged cookie values as anonymous sessions.
+  }
+  return null;
+}
+
+function sessionCookie(token, maxAge = sessionTtlSeconds) {
+  return `${sessionCookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+function publicSession(session) {
+  return session?.role === "parent" ? { role: "parent" } : session ? { role: "student", studentId: session.studentId } : null;
+}
+
+function scopedData(data, session) {
+  if (session.role === "parent") return data;
+  const { studentId } = session;
+  return {
+    ...data,
+    students: data.students.filter((item) => item.id === studentId),
+    weeklyTemplate: data.weeklyTemplate.filter((item) => item.studentId === studentId),
+    checkins: data.checkins.filter((item) => item.studentId === studentId),
+    schedules: data.schedules.filter((item) => item.studentId === studentId),
+    quests: data.quests.filter((item) => item.studentId === "all" || item.studentId === studentId),
+  };
+}
+
+function readWeeklyTemplate() {
+  try {
+    const templatePath = path.join(root, "weekly-template.json");
+    const template = JSON.parse(fs.readFileSync(templatePath, "utf8"));
+    return Array.isArray(template) ? template : [];
+  } catch {
+    return [];
+  }
+}
+
+const bundledWeeklyTemplate = readWeeklyTemplate();
+const bundledTemplateIdsByStudent = new Map(
+  canonicalStudents.map((student) => [student.id, new Set(bundledWeeklyTemplate.filter((item) => item.studentId === student.id).map((item) => item.id))]),
+);
 
 const initialData = {
   students: canonicalStudents,
+  weeklyTemplate: bundledWeeklyTemplate,
+  checkins: [],
   schedules: [],
   quests: [
     {
@@ -84,6 +184,10 @@ function parseTelegramTargets() {
   });
 }
 
+function hasTursoConfig() {
+  return Boolean(tursoClient);
+}
+
 function hasSupabaseConfig() {
   return Boolean(supabaseUrl && supabaseServiceRoleKey);
 }
@@ -101,6 +205,9 @@ function normalizeData(data) {
       name: student.name,
       color: student.color,
     })),
+    // Confirmed timetable is server-owned and must never be replaced by client state.
+    weeklyTemplate: bundledWeeklyTemplate,
+    checkins: Array.isArray(data?.checkins) ? data.checkins : [],
     schedules: Array.isArray(data?.schedules) ? data.schedules : [],
     quests: Array.isArray(data?.quests) ? data.quests : initialData.quests,
   };
@@ -123,6 +230,45 @@ function readFileData() {
 function writeFileData(data) {
   ensureData();
   fs.writeFileSync(dataPath, JSON.stringify({ ...normalizeData(data), updatedAt: new Date().toISOString() }, null, 2));
+}
+
+async function readTursoData() {
+  const stateResult = await tursoClient.execute({
+    sql: "select data from family_app_state where id = ? limit 1",
+    args: [appStateId],
+  });
+  const persisted = stateResult.rows[0]?.data ? JSON.parse(String(stateResult.rows[0].data)) : initialData;
+  const checkinResult = await tursoClient.execute({
+    sql: "select student_id, date, template_id, status, study_note, started_at, completed_at, updated_at from daily_checkins",
+    args: [],
+  });
+  const checkins = checkinResult.rows.map((row) => ({
+    studentId: String(row.student_id),
+    date: String(row.date),
+    templateId: String(row.template_id),
+    status: String(row.status),
+    studyNote: String(row.study_note || ""),
+    startedAt: row.started_at ? String(row.started_at) : "",
+    completedAt: String(row.completed_at),
+    updatedAt: String(row.updated_at),
+  }));
+  return normalizeData({ ...persisted, checkins });
+}
+
+async function writeTursoData(data) {
+  const normalized = normalizeData({ ...data, checkins: [] });
+  await tursoClient.execute({
+    sql: "insert into family_app_state (id, data, updated_at) values (?, ?, ?) on conflict(id) do update set data = excluded.data, updated_at = excluded.updated_at",
+    args: [appStateId, JSON.stringify(normalized), new Date().toISOString()],
+  });
+  return normalizeData(data);
+}
+
+async function writeTursoCheckin(checkin) {
+  await tursoClient.execute({
+    sql: "insert into daily_checkins (student_id, date, template_id, status, study_note, started_at, completed_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?) on conflict(student_id, date, template_id) do update set status = excluded.status, study_note = excluded.study_note, started_at = excluded.started_at, completed_at = excluded.completed_at, updated_at = excluded.updated_at",
+    args: [checkin.studentId, checkin.date, checkin.templateId, checkin.status, checkin.studyNote || "", checkin.startedAt || null, checkin.completedAt, checkin.updatedAt],
+  });
 }
 
 function supabaseHeaders(prefer = "") {
@@ -165,16 +311,16 @@ async function writeSupabaseData(data) {
 }
 
 async function readData() {
-  if (!hasSupabaseConfig()) return readFileData();
-  return readSupabaseData();
+  if (hasTursoConfig()) return readTursoData();
+  if (hasSupabaseConfig()) return readSupabaseData();
+  return readFileData();
 }
 
 async function writeData(data) {
-  if (!hasSupabaseConfig()) {
-    writeFileData(data);
-    return normalizeData(data);
-  }
-  return writeSupabaseData(data);
+  if (hasTursoConfig()) return writeTursoData(data);
+  if (hasSupabaseConfig()) return writeSupabaseData(data);
+  writeFileData(data);
+  return normalizeData(data);
 }
 
 function studentName(studentId, data) {
@@ -331,7 +477,13 @@ function buildCalendar(studentId, data) {
 async function handleCalendar(req, res, pathname) {
   const match = pathname.match(/^\/calendar\/([^/]+)\.ics$/);
   if (!match) return false;
+  const session = requireSession(req, res);
+  if (!session) return true;
   const studentId = decodeURIComponent(match[1]);
+  if (session.role === "student" && session.studentId !== studentId) {
+    sendJson(res, 403, { error: "Student calendar access is limited to their own calendar" });
+    return true;
+  }
   const data = await readData();
   const calendar = buildCalendar(studentId, data);
   if (!calendar) {
@@ -347,12 +499,97 @@ async function handleCalendar(req, res, pathname) {
   return true;
 }
 
-function sendJson(res, status, payload) {
+function sendJson(res, status, payload, headers = {}) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...headers,
   });
   res.end(JSON.stringify(payload));
+}
+
+function requireSession(req, res) {
+  const session = sessionFromRequest(req);
+  if (!session) {
+    sendJson(res, 401, { error: "Authentication required" });
+    return null;
+  }
+  return session;
+}
+
+function pinMatches(identity, pin) {
+  const expected = pinByIdentity[identity];
+  if (!expected || typeof pin !== "string") return false;
+  const actualBuffer = Buffer.from(pin);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+const loginFailureWindowMs = 15 * 60 * 1000;
+const maxLoginFailures = 5;
+const loginFailures = new Map();
+
+function loginAttemptKey(req, identity) {
+  const ip = req.socket.remoteAddress || "unknown";
+  const principal = typeof identity === "string" ? identity.slice(0, 128) : "unknown";
+  return `${ip}\u0000${principal}`;
+}
+
+function isLoginRateLimited(key, now = Date.now()) {
+  const attempts = (loginFailures.get(key) || []).filter((timestamp) => now - timestamp < loginFailureWindowMs);
+  if (attempts.length) loginFailures.set(key, attempts);
+  else loginFailures.delete(key);
+  return attempts.length >= maxLoginFailures;
+}
+
+function recordLoginFailure(key, now = Date.now()) {
+  const attempts = (loginFailures.get(key) || []).filter((timestamp) => now - timestamp < loginFailureWindowMs);
+  attempts.push(now);
+  loginFailures.set(key, attempts);
+}
+
+function clearLoginFailures(key) {
+  loginFailures.delete(key);
+}
+
+async function handleAuth(req, res, pathname) {
+  if (pathname === "/api/session" && req.method === "GET") {
+    sendJson(res, 200, { session: publicSession(sessionFromRequest(req)) });
+    return true;
+  }
+  if (pathname === "/api/logout" && req.method === "POST") {
+    sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookie("", 0) });
+    return true;
+  }
+  if (pathname !== "/api/login") return false;
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Method not allowed" });
+    return true;
+  }
+  try {
+    const { identity, pin } = JSON.parse((await readBody(req)) || "{}");
+    const attemptKey = loginAttemptKey(req, identity);
+    if (isLoginRateLimited(attemptKey)) {
+      sendJson(res, 429, { error: "Invalid credentials" });
+      return true;
+    }
+    if (!Object.hasOwn(pinByIdentity, identity) || !pinMatches(identity, pin)) {
+      recordLoginFailure(attemptKey);
+      sendJson(res, 401, { error: "Invalid credentials" });
+      return true;
+    }
+    clearLoginFailures(attemptKey);
+    const session = identity === "parent" ? { role: "parent" } : { role: "student", studentId: identity };
+    sendJson(res, 200, { session: publicSession(session) }, { "Set-Cookie": sessionCookie(createSession(identity)) });
+  } catch {
+    const attemptKey = loginAttemptKey(req, "unknown");
+    if (isLoginRateLimited(attemptKey)) sendJson(res, 429, { error: "Invalid credentials" });
+    else {
+      recordLoginFailure(attemptKey);
+      sendJson(res, 401, { error: "Invalid credentials" });
+    }
+  }
+  return true;
 }
 
 function readBody(req) {
@@ -371,13 +608,19 @@ function readBody(req) {
 }
 
 async function handleApi(req, res) {
+  const session = requireSession(req, res);
+  if (!session) return;
   try {
     if (req.method === "GET") {
-      sendJson(res, 200, await readData());
+      sendJson(res, 200, scopedData(await readData(), session));
       return;
     }
 
     if (req.method === "PUT") {
+      if (session.role !== "parent") {
+        sendJson(res, 403, { error: "Parent access required" });
+        return;
+      }
       const body = await readBody(req);
       const before = await readData();
       const after = await writeData(JSON.parse(body || "{}"));
@@ -392,9 +635,44 @@ async function handleApi(req, res) {
   }
 }
 
+async function handleCheckin(req, res) {
+  const session = requireSession(req, res);
+  if (!session) return;
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Method not allowed" });
+    return;
+  }
+  try {
+    const item = JSON.parse(await readBody(req) || "{}");
+    if (session.role === "student" && item.studentId !== session.studentId) {
+      sendJson(res, 403, { error: "Students can only check in to their own routine" });
+      return;
+    }
+    const templateIds = bundledTemplateIdsByStudent.get(item.studentId);
+    if (!RoutineModel.isValidCheckin(item, templateIds)) {
+      sendJson(res, 400, { error: "Invalid check-in" });
+      return;
+    }
+    const checkin = { ...item, id: RoutineModel.checkinKey(item), updatedAt: new Date().toISOString() };
+    if (hasTursoConfig()) {
+      await writeTursoCheckin(checkin);
+    } else {
+      const before = await readData();
+      const after = { ...before, checkins: RoutineModel.upsertCheckin(before.checkins, checkin) };
+      await writeData(after);
+    }
+    sendJson(res, 200, { ok: true, checkin });
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || "Server error" });
+  }
+}
+
 function handleStatus(req, res) {
+  if (!requireSession(req, res)) return;
   sendJson(res, 200, {
     ok: true,
+    storage: hasTursoConfig() ? "turso" : hasSupabaseConfig() ? "supabase" : "local-file",
+    turso: { configured: hasTursoConfig() },
     supabase: {
       configured: hasSupabaseConfig(),
       table: supabaseTable,
@@ -414,39 +692,54 @@ function handleStatus(req, res) {
 http
   .createServer((req, res) => {
     const pathname = decodeURIComponent(req.url.split("?")[0]);
-    if (pathname === "/api/vacation") {
-      handleApi(req, res);
-      return;
-    }
-    if (pathname === "/api/status") {
-      handleStatus(req, res);
-      return;
-    }
-
-    handleCalendar(req, res, pathname)
+    handleAuth(req, res, pathname)
       .then((handled) => {
         if (handled) return;
-
-        const filePath = pathname === "/" ? "/index.html" : pathname;
-        const file = path.normalize(path.join(root, filePath));
-
-        if (!file.startsWith(root)) {
-          res.writeHead(403);
-          res.end("forbidden");
+        if (pathname === "/api/vacation") {
+          handleApi(req, res);
+          return;
+        }
+        if (pathname === "/api/checkins") {
+          handleCheckin(req, res);
+          return;
+        }
+        if (pathname === "/api/status") {
+          handleStatus(req, res);
           return;
         }
 
-        fs.readFile(file, (error, data) => {
-          if (error) {
+        return handleCalendar(req, res, pathname).then((handledCalendar) => {
+          if (handledCalendar) return;
+
+          const filePath = pathname === "/" ? "/index.html" : pathname;
+          const publicStaticFiles = new Set(["/index.html", "/app.js", "/routine.js", "/styles.css"]);
+          const isPublicAsset = /^\/assets\/[A-Za-z0-9][A-Za-z0-9._/-]*\.(?:css|gif|ico|jpe?g|js|png|svg|webp)$/i.test(filePath);
+          const hasHiddenSegment = filePath.split("/").some((segment) => segment.startsWith("."));
+          if (hasHiddenSegment || (!publicStaticFiles.has(filePath) && !isPublicAsset)) {
             res.writeHead(404);
             res.end("not found");
             return;
           }
-          res.writeHead(200, {
-            "Content-Type": contentTypes[path.extname(file)] || "application/octet-stream",
-            "Cache-Control": "no-store",
+
+          const file = path.normalize(path.join(root, filePath));
+          if (!file.startsWith(`${root}${path.sep}`)) {
+            res.writeHead(404);
+            res.end("not found");
+            return;
+          }
+
+          fs.readFile(file, (error, data) => {
+            if (error) {
+              res.writeHead(404);
+              res.end("not found");
+              return;
+            }
+            res.writeHead(200, {
+              "Content-Type": contentTypes[path.extname(file)] || "application/octet-stream",
+              "Cache-Control": "no-store",
+            });
+            res.end(data);
           });
-          res.end(data);
         });
       })
       .catch((error) => sendJson(res, 500, { error: error.message || "Server error" }));
