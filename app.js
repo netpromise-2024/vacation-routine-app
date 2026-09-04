@@ -754,8 +754,8 @@ function routineAction(item) {
   const templateId = inlineArgument(item.id);
   const canRecord = ["study", "reading"].includes(item.category);
   const recordButton = canRecord ? `<button type="button" class="routine-record" onclick="openStudyLog(${templateId})">기록</button>` : "";
-  if (item.status === "completed") return `<span class="routine-actions"><span class="routine-complete">완료</span>${recordButton}</span>`;
-  if (item.category !== "study") return `<span class="routine-actions"><button type="button" class="routine-action" onclick="completeRoutine(${templateId})">완료</button>${recordButton}</span>`;
+  if (item.status === "completed") return canRecord ? `<span class="routine-actions"><span class="routine-complete">완료</span>${recordButton}</span>` : "";
+  if (item.category !== "study") return canRecord ? `<span class="routine-actions"><button type="button" class="routine-action" onclick="completeRoutine(${templateId})">완료</button>${recordButton}</span>` : "";
   if (state.activeStudy?.templateId === item.id) return `<span class="routine-actions"><button type="button" class="routine-action active" onclick="finishStudy(${templateId})">공부 마침</button>${recordButton}</span>`;
   return `<span class="routine-actions"><button type="button" class="routine-action" onclick="startStudy(${templateId})">공부 시작</button>${recordButton}</span>`;
 }
