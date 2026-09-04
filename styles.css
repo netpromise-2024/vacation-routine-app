@@ -1387,9 +1387,10 @@ button:active {
 }
 
 .routine-action,
+.routine-record,
 .routine-complete {
   flex: 0 0 auto;
-  min-width: 76px;
+  min-width: 64px;
   min-height: 42px;
   display: inline-flex;
   align-items: center;
@@ -1407,6 +1408,18 @@ button:active {
 
 .routine-action.active {
   background: #9a4e32;
+}
+
+.routine-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.routine-record {
+  color: #536044;
+  background: #edf2e8;
+  border: 1px solid #cbd8c3;
 }
 
 .now-card .routine-action {

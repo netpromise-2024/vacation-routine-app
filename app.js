@@ -711,11 +711,12 @@ function finishStudy(templateId) {
   render();
 }
 
-function openStudyLog() {
+function openStudyLog(templateId = "") {
   const items = routineItemsFor(state.selectedStudent, state.selectedDate);
   const firstAcademic = items.find((item) => ["study", "school", "reading"].includes(item.category));
-  if (!firstAcademic) return;
-  state.studySheet = { templateId: firstAcademic.id, startedAt: new Date().toISOString(), manual: true };
+  const selected = items.find((item) => item.id === templateId && ["study", "school", "reading"].includes(item.category)) || firstAcademic;
+  if (!selected) return;
+  state.studySheet = { templateId: selected.id, startedAt: new Date().toISOString(), manual: !templateId };
   render();
 }
 
@@ -751,10 +752,12 @@ function inlineArgument(value) {
 
 function routineAction(item) {
   const templateId = inlineArgument(item.id);
-  if (item.status === "completed") return `<span class="routine-complete">완료</span>`;
-  if (item.category !== "study") return `<button type="button" class="routine-action" onclick="completeRoutine(${templateId})">완료</button>`;
-  if (state.activeStudy?.templateId === item.id) return `<button type="button" class="routine-action active" onclick="finishStudy(${templateId})">공부 마침</button>`;
-  return `<button type="button" class="routine-action" onclick="startStudy(${templateId})">공부 시작</button>`;
+  const canRecord = ["study", "school", "reading"].includes(item.category);
+  const recordButton = canRecord ? `<button type="button" class="routine-record" onclick="openStudyLog(${templateId})">기록</button>` : "";
+  if (item.status === "completed") return `<span class="routine-actions"><span class="routine-complete">완료</span>${recordButton}</span>`;
+  if (item.category !== "study") return `<span class="routine-actions"><button type="button" class="routine-action" onclick="completeRoutine(${templateId})">완료</button>${recordButton}</span>`;
+  if (state.activeStudy?.templateId === item.id) return `<span class="routine-actions"><button type="button" class="routine-action active" onclick="finishStudy(${templateId})">공부 마침</button>${recordButton}</span>`;
+  return `<span class="routine-actions"><button type="button" class="routine-action" onclick="startStudy(${templateId})">공부 시작</button>${recordButton}</span>`;
 }
 
 function renderChildToday(student) {
