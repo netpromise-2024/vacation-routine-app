@@ -1512,7 +1512,24 @@ button:active {
   border-top: 1px solid #f0ede7;
 }
 
-.study-log strong {
+.study-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.study-log-add {
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 10px;
+  color: #ffffff;
+  background: #7c8b55;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.study-log-empty {
   color: #7a571f;
 }
 

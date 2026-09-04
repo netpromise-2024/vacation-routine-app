@@ -22,7 +22,7 @@ function startServer(env) {
     child.stdout.on("data", (chunk) => (output += chunk));
     child.stderr.on("data", (chunk) => (output += chunk));
     child.once("exit", (code) => resolve({ child, code, output }));
-    setTimeout(() => resolve({ child, code: null, output }), 300);
+    setTimeout(() => resolve({ child, code: null, output }), 1200);
   });
 }
 

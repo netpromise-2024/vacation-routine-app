@@ -711,6 +711,14 @@ function finishStudy(templateId) {
   render();
 }
 
+function openStudyLog() {
+  const items = routineItemsFor(state.selectedStudent, state.selectedDate);
+  const firstAcademic = items.find((item) => ["study", "school", "reading"].includes(item.category));
+  if (!firstAcademic) return;
+  state.studySheet = { templateId: firstAcademic.id, startedAt: new Date().toISOString(), manual: true };
+  render();
+}
+
 function saveStudyRecord(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -754,7 +762,7 @@ function renderChildToday(student) {
   const remaining = items.filter((item) => item.status !== "completed");
   const priority = remaining.find((item) => item.category === "study") || remaining[0];
   const completed = items.filter((item) => item.status === "completed").length;
-  const studyRecords = items.filter((item) => item.category === "study" && item.status === "completed" && item.studyNote);
+  const studyRecords = items.filter((item) => item.status === "completed" && item.studyNote);
   if (!items.length) return `<section class="child-empty"><h2>오늘 시간표를 불러오지 못했어요.</h2><p>새로고침 후 다시 확인해 주세요.</p></section>`;
   return `
     <section class="today-hero">
@@ -770,14 +778,16 @@ function renderChildToday(student) {
       <div class="routine-head"><h2>오늘 일정</h2><span>${items.length}개</span></div>
       <div class="routine-list">${items.map((item) => `<article class="routine-row ${item.status === "completed" ? "done" : ""}"><time>${item.start}<span>${item.end}</span></time><div><strong>${escapeHtml(item.title)}</strong><p>${categoryLabel(item.category)}${item.studyNote ? ` · ${escapeHtml(item.studyNote)}` : ""}</p></div>${routineAction(item)}</article>`).join("")}</div>
     </section>
-    ${studyRecords.length ? `<section class="study-log"><h2>오늘 공부 기록</h2>${studyRecords.map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${escapeHtml(item.studyNote)}</p>`).join("")}</section>` : ""}
+    <section class="study-log"><div class="study-log-head"><h2>오늘 공부 기록</h2><button type="button" class="study-log-add" onclick="openStudyLog()">기록 추가</button></div>${studyRecords.length ? studyRecords.map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${escapeHtml(item.studyNote)}</p>`).join("") : `<p class="study-log-empty">아직 기록이 없습니다. 공부한 과목과 내용을 남겨보세요.</p>`}</section>
   `;
 }
 
 function renderStudySheet() {
-  const item = routineItemsFor(state.selectedStudent, state.selectedDate).find((occurrence) => occurrence.id === state.studySheet?.templateId);
+  const academicItems = routineItemsFor(state.selectedStudent, state.selectedDate).filter((occurrence) => ["study", "school", "reading"].includes(occurrence.category));
+  const item = academicItems.find((occurrence) => occurrence.id === state.studySheet?.templateId);
   if (!item) return "";
-  return `<div class="sheet-backdrop"><section class="study-sheet"><header><div><p>공부 기록</p><h2>${escapeHtml(item.title)}</h2></div><button type="button" onclick="closeStudySheet()">${icon("close")}</button></header><form class="form" onsubmit="saveStudyRecord(event)"><input type="hidden" name="templateId" value="${escapeAttr(item.id)}" /><label>오늘 한 공부<input name="studyNote" required maxlength="140" placeholder="예: 수학 문제집 34~41쪽" /></label><button type="submit" class="primary">기록 완료</button></form></section></div>`;
+  const subjectPicker = state.studySheet?.manual ? `<label>과목<select name="templateId">${academicItems.map((occurrence) => `<option value="${escapeAttr(occurrence.id)}" ${occurrence.id === item.id ? "selected" : ""}>${escapeHtml(occurrence.title)} · ${occurrence.start}</option>`).join("")}</select></label>` : `<input type="hidden" name="templateId" value="${escapeAttr(item.id)}" />`;
+  return `<div class="sheet-backdrop"><section class="study-sheet"><header><div><p>공부 기록</p><h2>${state.studySheet?.manual ? "오늘 공부 내용" : escapeHtml(item.title)}</h2></div><button type="button" onclick="closeStudySheet()">${icon("close")}</button></header><form class="form" onsubmit="saveStudyRecord(event)">${subjectPicker}<label>오늘 한 공부<input name="studyNote" required maxlength="140" placeholder="예: 수학 문제집 34~41쪽" /></label><button type="submit" class="primary">기록 완료</button></form></section></div>`;
 }
 
 function render() {
@@ -1150,6 +1160,7 @@ Object.assign(window, {
   completeRoutine,
   startStudy,
   finishStudy,
+  openStudyLog,
   saveStudyRecord,
   closeStudySheet,
 });
