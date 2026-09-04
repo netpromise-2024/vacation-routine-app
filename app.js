@@ -713,8 +713,8 @@ function finishStudy(templateId) {
 
 function openStudyLog(templateId = "") {
   const items = routineItemsFor(state.selectedStudent, state.selectedDate);
-  const firstAcademic = items.find((item) => ["study", "school", "reading"].includes(item.category));
-  const selected = items.find((item) => item.id === templateId && ["study", "school", "reading"].includes(item.category)) || firstAcademic;
+  const firstAcademic = items.find((item) => ["study", "reading"].includes(item.category));
+  const selected = items.find((item) => item.id === templateId && ["study", "reading"].includes(item.category)) || firstAcademic;
   if (!selected) return;
   state.studySheet = { templateId: selected.id, startedAt: new Date().toISOString(), manual: !templateId };
   render();
@@ -752,7 +752,7 @@ function inlineArgument(value) {
 
 function routineAction(item) {
   const templateId = inlineArgument(item.id);
-  const canRecord = ["study", "school", "reading"].includes(item.category);
+  const canRecord = ["study", "reading"].includes(item.category);
   const recordButton = canRecord ? `<button type="button" class="routine-record" onclick="openStudyLog(${templateId})">기록</button>` : "";
   if (item.status === "completed") return `<span class="routine-actions"><span class="routine-complete">완료</span>${recordButton}</span>`;
   if (item.category !== "study") return `<span class="routine-actions"><button type="button" class="routine-action" onclick="completeRoutine(${templateId})">완료</button>${recordButton}</span>`;
@@ -786,7 +786,7 @@ function renderChildToday(student) {
 }
 
 function renderStudySheet() {
-  const academicItems = routineItemsFor(state.selectedStudent, state.selectedDate).filter((occurrence) => ["study", "school", "reading"].includes(occurrence.category));
+  const academicItems = routineItemsFor(state.selectedStudent, state.selectedDate).filter((occurrence) => ["study", "reading"].includes(occurrence.category));
   const item = academicItems.find((occurrence) => occurrence.id === state.studySheet?.templateId);
   if (!item) return "";
   const subjectPicker = state.studySheet?.manual ? `<label>과목<select name="templateId">${academicItems.map((occurrence) => `<option value="${escapeAttr(occurrence.id)}" ${occurrence.id === item.id ? "selected" : ""}>${escapeHtml(occurrence.title)} · ${occurrence.start}</option>`).join("")}</select></label>` : `<input type="hidden" name="templateId" value="${escapeAttr(item.id)}" />`;
